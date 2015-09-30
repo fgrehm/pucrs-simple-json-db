@@ -1,14 +1,13 @@
 package main
 
 import (
-	_ "bytes"
-	_ "encoding/binary"
-	_ "fmt"
+	"log"
 	"os"
 )
 
 const (
-	DATAFILE_SIZE = 1024 * 1024 * 256
+	DATAFILE_SIZE  = 1024 * 1024 * 256 // 256 MB
+	DATABLOCK_SIZE = 1024 * 4          // 4KB
 )
 
 func main() {
@@ -17,5 +16,7 @@ func main() {
 		panic(err)
 	}
 
+	log.Println("Creating datafile...")
 	file.Truncate(DATAFILE_SIZE)
+	log.Println("DONE")
 }
