@@ -17,10 +17,11 @@ var (
 )
 
 func main() {
-	file, err := createDatafile()
+	file, err := createDatafile("metadata-db.dat")
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 
 	writeInt16(file, 7)
 	writeInt16(file, 1)
@@ -39,13 +40,17 @@ func main() {
 	}
 }
 
-func createDatafile() (*os.File, error) {
-	file, err := os.Create("metadata-db.dat")
-	if err != nil {
-		return nil, err
+func createDatafile(filename string) (*os.File, error) {
+	if _, err := os.Stat(filename); err == nil {
+		log.Println("Datafile exists, reusing it")
+		return os.OpenFile(filename, os.O_RDWR, 0666)
 	}
 
 	log.Println("Creating datafile...")
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, err
+	}
 	file.Truncate(DATAFILE_SIZE)
 	log.Println("DONE")
 
