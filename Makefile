@@ -9,6 +9,10 @@ build: bin/metadata-db
 bin/metadata-db: src/**/*.go
 	gb build -v all
 
+.PHONY: fmt
+fmt: src/**/*.go
+	go fmt ./...
+
 .PHONY: hack
 hack:
 	docker run \
