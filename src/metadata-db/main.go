@@ -11,14 +11,17 @@ func main() {
 	}
 	defer df.Close()
 
-	block, err := df.ReadBlock(5)
+	block, err := df.ReadBlock(0)
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("%x", block.Data[0])
-	block.Data[0] = 0x08
-	log.Printf("%x", block.Data[1])
-	block.Data[1] = 0x09
+	log.Println(DatablockByteOrder.Uint16(block.Data[0:2]))
+	log.Println(DatablockByteOrder.Uint16(block.Data[2:4]))
+
+	DatablockByteOrder.PutUint16(block.Data[0:2], uint16(1))
+	DatablockByteOrder.PutUint16(block.Data[2:4], uint16(99))
+	DatablockByteOrder.PutUint16(block.Data[10:12], uint16(4))
 
 	df.WriteBlock(block)
+	log.Println("Done")
 }

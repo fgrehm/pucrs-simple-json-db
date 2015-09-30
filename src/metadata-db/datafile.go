@@ -82,6 +82,7 @@ func (df *datafile) WriteBlock(db *Datablock) error {
 	if _, err := io.CopyN(df.file, buffer, DATABLOCK_SIZE); err != nil {
 		return err
 	}
+	df.file.Sync()
 
 	return nil
 }
