@@ -26,3 +26,6 @@ _testmain.go
 # Gb output dirs
 bin/
 pkg/
+
+# Datafile
+metadata-db.dat

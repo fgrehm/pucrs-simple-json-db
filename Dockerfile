@@ -19,7 +19,7 @@ ENV HOME="/home/developer" \
 RUN set -x \
     && mkdir -p $HOME/bin \
     && echo 'source /etc/profile.d/bash_completion.sh' >> $HOME/.bashrc \
-    && echo "alias ll='ls -la'" >> $HOME/.bashrc \
+    && echo "alias ll='ls -lah'" >> $HOME/.bashrc \
     && curl -Ls https://github.com/progrium/basht/releases/download/v0.1.0/basht_0.1.0_Linux_x86_64.tgz \
        | tar -zxC $HOME/bin \
     && chmod +x $HOME/bin/basht \
