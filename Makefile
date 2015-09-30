@@ -7,7 +7,7 @@ all: build
 build: bin/metadata-db
 
 bin/metadata-db: src/**/*.go
-	gb build -v all
+	gb build all
 
 .PHONY: fmt
 fmt: src/**/*.go
