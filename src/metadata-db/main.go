@@ -1,5 +1,9 @@
 package main
 
+import (
+	"log"
+)
+
 func main() {
 	df, err := NewDatafile("metadata-db.dat")
 	if err != nil {
@@ -7,16 +11,14 @@ func main() {
 	}
 	defer df.Close()
 
-	df.WriteInt16(0, 7)
-	df.WriteInt16(2, 1)
-
-	var i int64 = 0
-	for ; i < 10; i++ {
-		i, err := df.ReadInt16(i)
-		if err != nil {
-			panic(err)
-		}
-
-		println(i)
+	block, err := df.ReadBlock(5)
+	if err != nil {
+		panic(err)
 	}
+	log.Printf("%x", block.Data[0])
+	block.Data[0] = 0x08
+	log.Printf("%x", block.Data[1])
+	block.Data[1] = 0x09
+
+	df.WriteBlock(block)
 }

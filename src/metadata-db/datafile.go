@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"io"
 	"log"
 	"os"
 )
@@ -17,12 +19,17 @@ var (
 
 type Datafile interface {
 	Close()
-	WriteInt16(position int64, i uint16) error
-	ReadInt16(position int64) (ret uint16, err error)
+	ReadBlock(id int) (*Datablock, error)
+	WriteBlock(db *Datablock) error
 }
 
 type datafile struct {
 	file *os.File
+}
+
+type Datablock struct {
+	Data []byte
+	ID   uint16
 }
 
 func NewDatafile(filename string) (Datafile, error) {
@@ -51,21 +58,32 @@ func openDatafile(filename string) (*os.File, error) {
 	return file, nil
 }
 
-func (df *datafile) WriteInt16(position int64, i uint16) error {
-	if _, err := df.file.Seek(position, 0); err != nil {
-		return err
+func (df *datafile) ReadBlock(id int) (*Datablock, error) {
+	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
+		return nil, err
 	}
-	log.Printf("Writing int16 `%d`", i)
-	return binary.Write(df.file, DatablockByteOrder, i)
+	log.Printf("Reading datablock %016d", id)
+	buffer := bytes.NewBuffer(make([]byte, 0, DATABLOCK_SIZE))
+
+	if _, err := io.CopyN(buffer, df.file, DATABLOCK_SIZE); err != nil {
+		return nil, err
+	}
+
+	return &Datablock{ID: uint16(id), Data: buffer.Bytes()}, nil
 }
 
-func (df *datafile) ReadInt16(position int64) (ret uint16, err error) {
-	if _, err := df.file.Seek(position, 0); err != nil {
-		return 0, err
+func (df *datafile) WriteBlock(db *Datablock) error {
+	if _, err := df.file.Seek(int64(db.ID*DATABLOCK_SIZE), 0); err != nil {
+		return err
 	}
-	log.Println("Reading int16")
-	err = binary.Read(df.file, DatablockByteOrder, &ret)
-	return
+	log.Printf("Writing datablock %016d", db.ID)
+	buffer := bytes.NewBuffer(db.Data)
+
+	if _, err := io.CopyN(df.file, buffer, DATABLOCK_SIZE); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (df *datafile) Close() {
