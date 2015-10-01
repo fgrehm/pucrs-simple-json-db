@@ -19,7 +19,7 @@ var (
 
 type Datafile interface {
 	Close()
-	ReadBlock(id int) (*Datablock, error)
+	ReadBlock(id uint16) (*Datablock, error)
 	WriteBlock(db *Datablock) error
 }
 
@@ -53,7 +53,7 @@ func openDatafile(filename string) (*os.File, error) {
 	return file, nil
 }
 
-func (df *datafile) ReadBlock(id int) (*Datablock, error) {
+func (df *datafile) ReadBlock(id uint16) (*Datablock, error) {
 	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
 		return nil, err
 	}
