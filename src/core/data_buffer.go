@@ -6,6 +6,7 @@ import (
 
 type DataBuffer interface {
 	FetchBlock(id uint16) (*Datablock, error)
+	WithBlock(id uint16, withFunc func(*Datablock) error) error
 	Flush() error
 }
 
@@ -45,6 +46,17 @@ func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
 		db.frameIds = append(db.frameIds, dataBlock.ID)
 
 		return dataBlock, nil
+	}
+}
+
+// This is a method that deals with reading and writing datablocks back into the buffer,
+// soon to be used when manipulating blocks concurrently
+func (db *dataBuffer) WithBlock(id uint16, withFunc func(*Datablock) error) error {
+	block, err := db.FetchBlock(id)
+	if err != nil {
+		return err
+	} else {
+		return withFunc(block)
 	}
 }
 

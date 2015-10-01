@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"errors"
 	"testing"
 
 	"core"
@@ -78,6 +79,35 @@ func TestEvictsCachedBlocksAfterFillingInAllFrames(t *testing.T) {
 	buffer.FetchBlock(1)
 	if readCount != 5 {
 		t.Error("Read from cache but should not do that")
+	}
+}
+
+func TestWithBlockExecutesCallbackWithDataBlockAndReturnsInternalError(t *testing.T) {
+	fakeError := errors.New("An error")
+	fakeBlock := &core.Datablock{ID: 0, Data: []byte{}}
+	fakeDataFile := newFakeDataFile([]*core.Datablock{fakeBlock})
+
+	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error {
+		if block != fakeBlock {
+			t.Error("Unknown block returned")
+		}
+		return fakeError
+	})
+	if err != fakeError {
+		t.Error("Unknown error returned")
+	}
+}
+
+func TestWithBlockReturnsReadErrorWhenItHappens(t *testing.T) {
+	fakeError := errors.New("An error")
+	fakeDataFile := newFakeDataFile([]*core.Datablock{&core.Datablock{}})
+	fakeDataFile.readBlockFunc = func(id uint16) (*core.Datablock, error) {
+		return nil, fakeError
+	}
+
+	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error { return nil })
+	if err != fakeError {
+		t.Error("Unknown error returned")
 	}
 }
 

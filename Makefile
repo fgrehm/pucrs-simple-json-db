@@ -11,7 +11,8 @@ bin/metadata-db: src/**/*.go
 
 .PHONY: test
 test:
-	gb test ./...
+	echo 'Running tests...'
+	gb test core
 
 .PHONY: fmt
 fmt: src/**/*.go
