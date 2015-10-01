@@ -1,6 +1,6 @@
 package core
 
 type Datablock struct {
-  Data []byte
-  ID   uint16
+	Data []byte
+	ID   uint16
 }

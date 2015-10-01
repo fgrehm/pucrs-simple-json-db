@@ -1,13 +1,17 @@
 DOCKER_IMAGE := fgrehm/pucrs-metadata-db
 DOCKER_DEV_CONTAINER_NAME := pucrs-metadata-db-dev
 
-all: build
+all: build test
 
 .PHONY: build
 build: bin/metadata-db
 
 bin/metadata-db: src/**/*.go
 	gb build all
+
+.PHONY: test
+test:
+	gb test ./...
 
 .PHONY: fmt
 fmt: src/**/*.go

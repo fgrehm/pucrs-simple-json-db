@@ -1,5 +1,6 @@
 # TODO
 
+- [x] BitMap abstraction
 - [ ] Autoincrement ID for records
 - [ ] Shell with readline enabled
 - [ ] Reserve the first 4 datablocks for some internal information (like the datablocks bitmap and the next ID to be used)
