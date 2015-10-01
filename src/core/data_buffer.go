@@ -10,17 +10,51 @@ type DataBuffer interface {
 }
 
 type dataBuffer struct {
-	df Datafile
+	df       Datafile
+	frames   map[uint16]*bufferFrame
+	frameIds []uint16
+	size     int
 }
 
-func NewDataBuffer(df Datafile) DataBuffer {
-	return &dataBuffer{df}
+type bufferFrame struct {
+	dataBlock *Datablock
+}
+
+func NewDataBuffer(df Datafile, size int) DataBuffer {
+	return &dataBuffer{
+		df:       df,
+		size:     size,
+		frames:   make(map[uint16]*bufferFrame),
+		frameIds: make([]uint16, 0, size),
+	}
 }
 
 func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
-	return db.df.ReadBlock(id)
+	if db.frames[id] != nil {
+		return db.frames[id].dataBlock, nil
+	} else {
+		if len(db.frameIds) == db.size {
+			db.evictFirstFrame()
+		}
+
+		dataBlock, err := db.df.ReadBlock(id)
+		if err != nil {
+			return nil, err
+		}
+		db.frames[dataBlock.ID] = &bufferFrame{dataBlock}
+		db.frameIds = append(db.frameIds, dataBlock.ID)
+
+		return dataBlock, nil
+	}
 }
 
 func (db *dataBuffer) Flush() error {
 	return errors.New("Not implemented yet")
+}
+
+func (db *dataBuffer) evictFirstFrame() {
+	id := db.frames[db.frameIds[0]].dataBlock.ID
+	// log.Printf("Removing %d from data buffer", id)
+	delete(db.frames, id)
+	db.frameIds = db.frameIds[1:]
 }

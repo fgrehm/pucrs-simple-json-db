@@ -13,7 +13,7 @@ func main() {
 	}
 	defer df.Close()
 
-	dataBuffer := core.NewDataBuffer(df)
+	dataBuffer := core.NewDataBuffer(df, 256)
 
 	block, err := dataBuffer.FetchBlock(0)
 	if err != nil {
