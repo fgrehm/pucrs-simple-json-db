@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bytes"
@@ -25,11 +25,6 @@ type Datafile interface {
 
 type datafile struct {
 	file *os.File
-}
-
-type Datablock struct {
-	Data []byte
-	ID   uint16
 }
 
 func NewDatafile(filename string) (Datafile, error) {
@@ -90,3 +85,11 @@ func (df *datafile) WriteBlock(db *Datablock) error {
 func (df *datafile) Close() {
 	df.file.Close()
 }
+
+// func (df *datafile) WriteInt16(position int64, i uint16) error {
+// 	if _, err := df.file.Seek(position, 0); err != nil {
+// 		return err
+// 	}
+// 	log.Printf("Writing int16 `%d`", i)
+// 	return binary.Write(df.file, DatablockByteOrder, i)
+// }

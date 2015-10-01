@@ -2,10 +2,12 @@ package main
 
 import (
 	"log"
+
+  "core"
 )
 
 func main() {
-	df, err := NewDatafile("metadata-db.dat")
+	df, err := core.NewDatafile("metadata-db.dat")
 	if err != nil {
 		panic(err)
 	}
@@ -15,12 +17,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	log.Println(DatablockByteOrder.Uint16(block.Data[0:2]))
-	log.Println(DatablockByteOrder.Uint16(block.Data[2:4]))
+	log.Println(core.DatablockByteOrder.Uint16(block.Data[0:2]))
+	log.Println(core.DatablockByteOrder.Uint16(block.Data[2:4]))
 
-	DatablockByteOrder.PutUint16(block.Data[0:2], uint16(1))
-	DatablockByteOrder.PutUint16(block.Data[2:4], uint16(99))
-	DatablockByteOrder.PutUint16(block.Data[10:12], uint16(4))
+	core.DatablockByteOrder.PutUint16(block.Data[0:2], uint16(1))
+	core.DatablockByteOrder.PutUint64(block.Data[2:10], uint64(9999))
+	core.DatablockByteOrder.PutUint16(block.Data[14:16], uint16(4))
 
 	df.WriteBlock(block)
 	log.Println("Done")
