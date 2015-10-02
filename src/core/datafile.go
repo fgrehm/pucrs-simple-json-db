@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/binary"
 	"io"
 	"log"
@@ -19,8 +18,8 @@ var (
 
 type Datafile interface {
 	Close()
-	ReadBlock(id uint16) (*Datablock, error)
-	WriteBlock(db *Datablock) error
+	ReadBlock(id uint16, data []byte) error
+	WriteBlock(id uint16, data []byte) error
 }
 
 type datafile struct {
@@ -53,28 +52,22 @@ func openDatafile(filename string) (*os.File, error) {
 	return file, nil
 }
 
-func (df *datafile) ReadBlock(id uint16) (*Datablock, error) {
+func (df *datafile) ReadBlock(id uint16, data []byte) error {
 	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
-		return nil, err
-	}
-	log.Printf("Reading datablock %016d", id)
-	buffer := bytes.NewBuffer(make([]byte, 0, DATABLOCK_SIZE))
-
-	if _, err := io.CopyN(buffer, df.file, DATABLOCK_SIZE); err != nil {
-		return nil, err
-	}
-
-	return &Datablock{ID: uint16(id), Data: buffer.Bytes()}, nil
-}
-
-func (df *datafile) WriteBlock(db *Datablock) error {
-	if _, err := df.file.Seek(int64(db.ID*DATABLOCK_SIZE), 0); err != nil {
 		return err
 	}
-	log.Printf("Writing datablock %016d", db.ID)
-	buffer := bytes.NewBuffer(db.Data)
+	log.Printf("Reading datablock %016d", id)
+	reader := &io.LimitedReader{df.file, DATABLOCK_SIZE}
+	_, err := reader.Read(data)
+	return err
+}
 
-	if _, err := io.CopyN(df.file, buffer, DATABLOCK_SIZE); err != nil {
+func (df *datafile) WriteBlock(id uint16, data []byte) error {
+	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
+		return err
+	}
+	log.Printf("Writing datablock %016d", id)
+	if _, err := df.file.Write(data); err != nil {
 		return err
 	}
 	df.file.Sync()

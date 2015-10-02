@@ -11,41 +11,65 @@ type DataBuffer interface {
 }
 
 type dataBuffer struct {
-	df       Datafile
-	frames   map[uint16]*bufferFrame
-	frameIds []uint16
-	size     int
+	df          Datafile
+	frames      []*bufferFrame          // Reusable frames of memory
+	idToFrame   map[uint16]*bufferFrame // Used for mapping an id to a buffer on the frames array
+	nextVictims []uint16
+	size        int
 }
 
 type bufferFrame struct {
-	dataBlock *Datablock
+	inUse    bool
+	position int
+	data     []byte
 }
 
 func NewDataBuffer(df Datafile, size int) DataBuffer {
+	// Reusable array of buffers
+	frames := make([]*bufferFrame, 0, size)
+	for i := 0; i < size; i++ {
+		frames = append(frames, &bufferFrame{
+			inUse:    false,
+			position: i,
+			data:     make([]byte, DATABLOCK_SIZE, DATABLOCK_SIZE),
+		})
+	}
+
 	return &dataBuffer{
-		df:       df,
-		size:     size,
-		frames:   make(map[uint16]*bufferFrame),
-		frameIds: make([]uint16, 0, size),
+		df:          df,
+		size:        size,
+		frames:      frames,
+		idToFrame:   make(map[uint16]*bufferFrame),
+		nextVictims: make([]uint16, 0, size),
 	}
 }
 
 func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
-	if db.frames[id] != nil {
-		return db.frames[id].dataBlock, nil
+	frame, present := db.idToFrame[id]
+	if present {
+		return &Datablock{ID: id, Data: frame.data}, nil
 	} else {
-		if len(db.frameIds) == db.size {
-			db.evictFirstFrame()
+		if len(db.nextVictims) == db.size {
+			db.evictOldestFrame()
 		}
 
-		dataBlock, err := db.df.ReadBlock(id)
+		for i := 0; i < db.size; i++ {
+			frame = db.frames[i]
+			if !db.frames[i].inUse {
+				break
+			}
+		}
+
+		err := db.df.ReadBlock(id, frame.data)
 		if err != nil {
 			return nil, err
 		}
-		db.frames[dataBlock.ID] = &bufferFrame{dataBlock}
-		db.frameIds = append(db.frameIds, dataBlock.ID)
 
-		return dataBlock, nil
+		frame.inUse = true
+		db.nextVictims = append(db.nextVictims, id)
+		db.idToFrame[id] = frame
+
+		return &Datablock{ID: id, Data: frame.data}, nil
 	}
 }
 
@@ -64,9 +88,11 @@ func (db *dataBuffer) Flush() error {
 	return errors.New("Not implemented yet")
 }
 
-func (db *dataBuffer) evictFirstFrame() {
-	id := db.frames[db.frameIds[0]].dataBlock.ID
-	// log.Printf("Removing %d from data buffer", id)
-	delete(db.frames, id)
-	db.frameIds = db.frameIds[1:]
+func (db *dataBuffer) evictOldestFrame() {
+	id := db.nextVictims[0]
+	frame := db.idToFrame[id]
+
+	frame.inUse = false
+	delete(db.idToFrame, id)
+	db.nextVictims = db.nextVictims[1:]
 }

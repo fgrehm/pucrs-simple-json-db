@@ -8,8 +8,8 @@ import (
 )
 
 func TestFetchesBlockFromDataFile(t *testing.T) {
-	fakeDataBlock := &core.Datablock{ID: 1, Data: []byte{0x10, 0xF0}}
-	fakeDataFile := newFakeDataFile([]*core.Datablock{nil, fakeDataBlock})
+	fakeDataBlock := []byte{0x10, 0xF0}
+	fakeDataFile := newFakeDataFile([][]byte{nil, fakeDataBlock})
 
 	dataBlock, err := core.NewDataBuffer(fakeDataFile, 1).FetchBlock(1)
 	if err != nil {
@@ -18,20 +18,19 @@ func TestFetchesBlockFromDataFile(t *testing.T) {
 	if dataBlock.ID != 1 {
 		t.Errorf("ID doesn't match (expected %d got %d)", 1, dataBlock.ID)
 	}
-	if !slicesEqual(dataBlock.Data, fakeDataBlock.Data) {
-		t.Errorf("Data blocks do not match (expected %x got %x)", 1, fakeDataBlock.Data, dataBlock.Data)
+	if !slicesEqual(dataBlock.Data[0:2], fakeDataBlock) {
+		t.Errorf("Data blocks do not match (expected %x got %x)", fakeDataBlock, dataBlock.Data[0:2])
 	}
 }
 
 func TestFetchBlockCachesTheResult(t *testing.T) {
-	fakeDataBlock := &core.Datablock{ID: 1, Data: []byte{}}
-	fakeDataFile := newFakeDataFile([]*core.Datablock{nil, fakeDataBlock})
+	fakeDataFile := newFakeDataFile([][]byte{nil, []byte{}})
 
 	readCount := 0
 	original := fakeDataFile.readBlockFunc
-	fakeDataFile.readBlockFunc = func(id uint16) (*core.Datablock, error) {
+	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
 		readCount += 1
-		return original(id)
+		return original(id, data)
 	}
 
 	buffer := core.NewDataBuffer(fakeDataFile, 1)
@@ -45,17 +44,15 @@ func TestFetchBlockCachesTheResult(t *testing.T) {
 }
 
 func TestEvictsCachedBlocksAfterFillingInAllFrames(t *testing.T) {
-	fakeDataFile := newFakeDataFile([]*core.Datablock{
-		&core.Datablock{ID: 0, Data: []byte{}},
-		&core.Datablock{ID: 1, Data: []byte{}},
-		&core.Datablock{ID: 2, Data: []byte{}},
+	fakeDataFile := newFakeDataFile([][]byte{
+		[]byte{}, []byte{}, []byte{},
 	})
 
 	readCount := 0
 	original := fakeDataFile.readBlockFunc
-	fakeDataFile.readBlockFunc = func(id uint16) (*core.Datablock, error) {
+	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
 		readCount += 1
-		return original(id)
+		return original(id, data)
 	}
 
 	buffer := core.NewDataBuffer(fakeDataFile, 2)
@@ -84,11 +81,11 @@ func TestEvictsCachedBlocksAfterFillingInAllFrames(t *testing.T) {
 
 func TestWithBlockExecutesCallbackWithDataBlockAndReturnsInternalError(t *testing.T) {
 	fakeError := errors.New("An error")
-	fakeBlock := &core.Datablock{ID: 0, Data: []byte{}}
-	fakeDataFile := newFakeDataFile([]*core.Datablock{fakeBlock})
+	fakeBlock := []byte{0x12}
+	fakeDataFile := newFakeDataFile([][]byte{fakeBlock})
 
 	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error {
-		if block != fakeBlock {
+		if !slicesEqual(block.Data[0:1], fakeBlock) {
 			t.Error("Unknown block returned")
 		}
 		return fakeError
@@ -100,9 +97,9 @@ func TestWithBlockExecutesCallbackWithDataBlockAndReturnsInternalError(t *testin
 
 func TestWithBlockReturnsReadErrorWhenItHappens(t *testing.T) {
 	fakeError := errors.New("An error")
-	fakeDataFile := newFakeDataFile([]*core.Datablock{&core.Datablock{}})
-	fakeDataFile.readBlockFunc = func(id uint16) (*core.Datablock, error) {
-		return nil, fakeError
+	fakeDataFile := newFakeDataFile([][]byte{[]byte{}})
+	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
+		return fakeError
 	}
 
 	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error { return nil })
@@ -116,18 +113,22 @@ func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 }
 
 type inMemoryDataFile struct {
-	blocks         []*core.Datablock
+	blocks         [][]byte
 	closeFunc      func()
-	readBlockFunc  func(uint16) (*core.Datablock, error)
-	writeBlockFunc func(*core.Datablock) error
+	readBlockFunc  func(uint16, []byte) error
+	writeBlockFunc func(uint16, []byte) error
 }
 
-func newFakeDataFile(blocks []*core.Datablock) *inMemoryDataFile {
+func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
 	return &inMemoryDataFile{
 		blocks:    blocks,
 		closeFunc: func() {}, // NOOP by default
-		readBlockFunc: func(id uint16) (*core.Datablock, error) {
-			return blocks[id], nil
+		readBlockFunc: func(id uint16, data []byte) error {
+			block := blocks[id]
+			for i := 0; i < len(block); i++ {
+				data[i] = block[i]
+			}
+			return nil
 		},
 	}
 }
@@ -135,9 +136,9 @@ func newFakeDataFile(blocks []*core.Datablock) *inMemoryDataFile {
 func (df *inMemoryDataFile) Close() {
 	df.closeFunc()
 }
-func (df *inMemoryDataFile) ReadBlock(id uint16) (*core.Datablock, error) {
-	return df.readBlockFunc(id)
+func (df *inMemoryDataFile) ReadBlock(id uint16, data []byte) error {
+	return df.readBlockFunc(id, data)
 }
-func (df *inMemoryDataFile) WriteBlock(block *core.Datablock) error {
-	return df.writeBlockFunc(block)
+func (df *inMemoryDataFile) WriteBlock(id uint16, data []byte) error {
+	return df.writeBlockFunc(id, data)
 }
