@@ -21,6 +21,14 @@ func main() {
 	}
 	log.Println(core.DatablockByteOrder.Uint16(block.Data[0:2]))
 
+	block.Data[0] = 0x99
+	block.Data[1] = 0x99
+	dataBuffer.MarkAsDirty(0)
+
+	for i := 1; i < 257; i++ {
+		dataBuffer.FetchBlock(uint16(i))
+	}
+
 	// Test reading / writing blocks and bitmaps
 	//
 	// block, err := df.ReadBlock(0)
