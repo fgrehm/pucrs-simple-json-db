@@ -28,4 +28,4 @@ bin/
 pkg/
 
 # Datafile
-metadata-db.dat
+*.dat
