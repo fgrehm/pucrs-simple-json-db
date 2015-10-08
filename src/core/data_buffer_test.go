@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"errors"
 	"testing"
 
 	"core"
@@ -79,37 +78,64 @@ func TestEvictsCachedBlocksAfterFillingInAllFrames(t *testing.T) {
 	}
 }
 
-func TestWithBlockExecutesCallbackWithDataBlockAndReturnsInternalError(t *testing.T) {
-	fakeError := errors.New("An error")
-	fakeBlock := []byte{0x12}
-	fakeDataFile := newFakeDataFile([][]byte{fakeBlock})
-
-	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error {
-		if !slicesEqual(block.Data[0:1], fakeBlock) {
-			t.Error("Unknown block returned")
-		}
-		return fakeError
-	})
-	if err != fakeError {
-		t.Error("Unknown error returned")
-	}
-}
-
-func TestWithBlockReturnsReadErrorWhenItHappens(t *testing.T) {
-	fakeError := errors.New("An error")
-	fakeDataFile := newFakeDataFile([][]byte{[]byte{}})
-	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
-		return fakeError
-	}
-
-	err := core.NewDataBuffer(fakeDataFile, 1).WithBlock(0, func(block *core.Datablock) error { return nil })
-	if err != fakeError {
-		t.Error("Unknown error returned")
-	}
-}
-
 func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
-	t.Fatal("TODO: Implement this behavior")
+	fakeDataBlock := []byte{0x00, 0x01, 0x02}
+	fakeDataFile := newFakeDataFile([][]byte{
+		fakeDataBlock, []byte{}, []byte{},
+	})
+
+	blockThatWasWritten := uint16(999)
+	bytesWritten := []byte{}
+	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+		blockThatWasWritten = id
+		bytesWritten = data
+		return nil
+	}
+
+	buffer := core.NewDataBuffer(fakeDataFile, 2)
+
+	// Read the first 2 blocks and flag the first one as dirty
+	buffer.FetchBlock(0)
+	buffer.FetchBlock(1)
+	buffer.MarkAsDirty(0)
+
+	// Evict the first frame (by loading a third frame)
+	buffer.FetchBlock(2)
+
+	if blockThatWasWritten == 999 {
+		t.Fatal("Block was not saved to disk")
+	}
+	if blockThatWasWritten != 0 {
+		t.Errorf("Unknown block saved to disk (%d)", blockThatWasWritten)
+	}
+	if !slicesEqual(bytesWritten[0:3], fakeDataBlock) {
+		t.Errorf("Invalid data saved to disk %x", bytesWritten[0:3])
+	}
+}
+
+func TestDoesNotWriteFramesWhenEvictingIfItHasntBeenModified(t *testing.T) {
+	fakeDataFile := newFakeDataFile([][]byte{
+		[]byte{}, []byte{}, []byte{},
+	})
+
+	wroteToDisk := false
+	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+		wroteToDisk = true
+		return nil
+	}
+
+	buffer := core.NewDataBuffer(fakeDataFile, 2)
+
+	// Read the first 2 blocks and flag the first one as dirty
+	buffer.FetchBlock(0)
+	buffer.FetchBlock(1)
+
+	// Evict the first frame (by loading a third frame)
+	buffer.FetchBlock(2)
+
+	if wroteToDisk {
+		t.Fatal("No blocks should have been saved to disk")
+	}
 }
 
 type inMemoryDataFile struct {
@@ -123,6 +149,10 @@ func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
 	return &inMemoryDataFile{
 		blocks:    blocks,
 		closeFunc: func() {}, // NOOP by default
+		writeBlockFunc: func(id uint16, data []byte) error {
+			// NOOP by default
+			return nil
+		},
 		readBlockFunc: func(id uint16, data []byte) error {
 			block := blocks[id]
 			for i := 0; i < len(block); i++ {

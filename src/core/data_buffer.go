@@ -6,7 +6,7 @@ import (
 
 type DataBuffer interface {
 	FetchBlock(id uint16) (*Datablock, error)
-	WithBlock(id uint16, withFunc func(*Datablock) error) error
+	MarkAsDirty(id uint16) error
 	Flush() error
 }
 
@@ -20,6 +20,7 @@ type dataBuffer struct {
 
 type bufferFrame struct {
 	inUse    bool
+	isDirty  bool
 	position int
 	data     []byte
 }
@@ -50,7 +51,9 @@ func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
 		return &Datablock{ID: id, Data: frame.data}, nil
 	} else {
 		if len(db.nextVictims) == db.size {
-			db.evictOldestFrame()
+			if err := db.evictOldestFrame(); err != nil {
+				return nil, err
+			}
 		}
 
 		for i := 0; i < db.size; i++ {
@@ -73,26 +76,30 @@ func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
 	}
 }
 
-// This is a method that deals with reading and writing datablocks back into the buffer,
-// soon to be used when manipulating blocks concurrently
-func (db *dataBuffer) WithBlock(id uint16, withFunc func(*Datablock) error) error {
-	block, err := db.FetchBlock(id)
-	if err != nil {
-		return err
-	} else {
-		return withFunc(block)
-	}
+func (db *dataBuffer) MarkAsDirty(id uint16) error {
+	frame := db.idToFrame[id]
+	frame.isDirty = true
+	return nil
 }
 
 func (db *dataBuffer) Flush() error {
 	return errors.New("Not implemented yet")
 }
 
-func (db *dataBuffer) evictOldestFrame() {
+func (db *dataBuffer) evictOldestFrame() error {
 	id := db.nextVictims[0]
 	frame := db.idToFrame[id]
 
+	if frame.isDirty {
+		if err := db.df.WriteBlock(id, frame.data); err != nil {
+			return err
+		}
+	}
+
 	frame.inUse = false
+	frame.isDirty = false
 	delete(db.idToFrame, id)
 	db.nextVictims = db.nextVictims[1:]
+
+	return nil
 }
