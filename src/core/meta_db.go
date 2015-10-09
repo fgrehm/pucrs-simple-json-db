@@ -1,5 +1,9 @@
 package core
 
+import (
+	"log"
+)
+
 const BUFFER_SIZE = 256
 
 type MetaDB interface {
@@ -19,8 +23,29 @@ func NewMetaDB(datafilePath string) (MetaDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	dataBuffer := NewDataBuffer(df, BUFFER_SIZE)
-	return &metaDb{df, dataBuffer}, nil
+	return NewMetaDBWithDataFile(df)
+}
+
+func NewMetaDBWithDataFile(dataFile Datafile) (MetaDB, error) {
+	dataBuffer := NewDataBuffer(dataFile, BUFFER_SIZE)
+	block, err := dataBuffer.FetchBlock(0)
+	if err != nil {
+		return nil, err
+	}
+	if DatablockByteOrder.Uint64(block.Data[0:8]) == 0 {
+		log.Println("Initializing datafile")
+
+		// Next ID = 1
+		DatablockByteOrder.PutUint64(block.Data[0:8], 1)
+		// Next Available Datablock = 1
+		DatablockByteOrder.PutUint16(block.Data[8:10], 1)
+
+		dataBuffer.MarkAsDirty(0)
+		if err = dataBuffer.Sync(); err != nil {
+			return nil, err
+		}
+	}
+	return &metaDb{dataFile, dataBuffer}, nil
 }
 
 func (m *metaDb) InsertRecord(data string) (uint64, error) {
@@ -34,13 +59,20 @@ func (m *metaDb) InsertRecord(data string) (uint64, error) {
 		return 0, err
 	}
 
+	recordId := DatablockByteOrder.Uint64(block.Data[0:8])
+	insertBlockId := DatablockByteOrder.Uint16(block.Data[8:10])
+	// Next ID
+	DatablockByteOrder.PutUint64(block.Data[0:8], recordId+1)
+
+	block, err = m.buffer.FetchBlock(insertBlockId)
 	for index, char := range []byte(data) {
 		block.Data[index] = char
 	}
 
 	m.buffer.MarkAsDirty(0)
+	m.buffer.MarkAsDirty(1)
 
-	return 99999, nil
+	return recordId, nil
 }
 
 func (m *metaDb) Close() error {

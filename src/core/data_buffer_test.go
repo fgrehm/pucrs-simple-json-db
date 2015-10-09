@@ -213,39 +213,3 @@ func TestReturnsErrorsWhenSyncing(t *testing.T) {
 		t.Fatal("Unknown error raised")
 	}
 }
-
-type inMemoryDataFile struct {
-	blocks         [][]byte
-	closeFunc      func() error
-	readBlockFunc  func(uint16, []byte) error
-	writeBlockFunc func(uint16, []byte) error
-}
-
-func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
-	return &inMemoryDataFile{
-		blocks: blocks,
-		closeFunc: func() error {
-			return nil // NOOP by default
-		},
-		writeBlockFunc: func(id uint16, data []byte) error {
-			return nil // NOOP by default
-		},
-		readBlockFunc: func(id uint16, data []byte) error {
-			block := blocks[id]
-			for i := 0; i < len(block); i++ {
-				data[i] = block[i]
-			}
-			return nil
-		},
-	}
-}
-
-func (df *inMemoryDataFile) Close() error {
-	return df.closeFunc()
-}
-func (df *inMemoryDataFile) ReadBlock(id uint16, data []byte) error {
-	return df.readBlockFunc(id, data)
-}
-func (df *inMemoryDataFile) WriteBlock(id uint16, data []byte) error {
-	return df.writeBlockFunc(id, data)
-}

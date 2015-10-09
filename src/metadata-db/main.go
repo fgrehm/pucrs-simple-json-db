@@ -17,7 +17,8 @@ func main() {
 		}
 	}()
 
-	log.Println(db.InsertRecord("AN STRING!!!"))
+	log.Println(db.InsertRecord("1sAN sTRi¬'^sNG!!!"))
+	log.Println(db.InsertRecord("1sAN sTRi¬'^sNG!!!"))
 
 	// Test reading / writing blocks and bitmaps
 	//
