@@ -41,14 +41,14 @@ func openDatafile(filename string) (*os.File, error) {
 		return os.OpenFile(filename, os.O_RDWR, 0666)
 	}
 
-	log.Println("Creating datafile...")
+	log.Println("Creating datafile")
 	file, err := os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
-	file.Truncate(DATAFILE_SIZE)
-	log.Println("DONE")
-
+	if err = file.Truncate(DATAFILE_SIZE); err != nil {
+		return nil, err
+	}
 	return file, nil
 }
 
