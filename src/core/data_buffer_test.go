@@ -167,15 +167,15 @@ func TestSavesDirtyFramesOnSync(t *testing.T) {
 	}
 
 	if len(blocksThatWereWritten) != 2 {
-		t.Fatalf("Should have written 2 blocks, wrote %d", len(blocksThatWereWritten))
+		t.Fatalf("Should have written 2 blocks, wrote %v", blocksThatWereWritten)
 	}
 
-	if blocksThatWereWritten[0] != 0 {
-		t.Error("Should have written the block 0")
+	if blocksThatWereWritten[0] != 0 && blocksThatWereWritten[1] != 0 {
+		t.Errorf("Should have written the block 0, wrote %v", blocksThatWereWritten)
 	}
 
-	if blocksThatWereWritten[1] != 2 {
-		t.Error("Should have written the block 2")
+	if blocksThatWereWritten[0] != 2 && blocksThatWereWritten[1] != 2 {
+		t.Errorf("Should have written the block 2, wrote %v", blocksThatWereWritten)
 	}
 }
 
