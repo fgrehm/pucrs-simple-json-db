@@ -22,7 +22,7 @@ func TestFetchesBlockFromDataFile(t *testing.T) {
 	}
 }
 
-func TestFetchBlockCachesTheResult(t *testing.T) {
+func TestFetchBlockCachesData(t *testing.T) {
 	fakeDataFile := newFakeDataFile([][]byte{nil, []byte{}})
 
 	readCount := 0
@@ -42,7 +42,7 @@ func TestFetchBlockCachesTheResult(t *testing.T) {
 	}
 }
 
-func TestEvictsCachedBlocksAfterFillingInAllFrames(t *testing.T) {
+func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
 	fakeDataFile := newFakeDataFile([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
@@ -113,7 +113,7 @@ func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	}
 }
 
-func TestDoesNotWriteFramesWhenEvictingIfItHasntBeenModified(t *testing.T) {
+func TestDiscardsUnmodifiedFrames(t *testing.T) {
 	fakeDataFile := newFakeDataFile([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
@@ -126,7 +126,7 @@ func TestDoesNotWriteFramesWhenEvictingIfItHasntBeenModified(t *testing.T) {
 
 	buffer := core.NewDataBuffer(fakeDataFile, 2)
 
-	// Read the first 2 blocks and flag the first one as dirty
+	// Read the first 2 blocks
 	buffer.FetchBlock(0)
 	buffer.FetchBlock(1)
 
