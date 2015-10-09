@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"errors"
 	"testing"
 
 	"core"
@@ -135,6 +136,72 @@ func TestDiscardsUnmodifiedFrames(t *testing.T) {
 
 	if wroteToDisk {
 		t.Fatal("No blocks should have been saved to disk")
+	}
+}
+
+func TestSavesDirtyFramesOnSync(t *testing.T) {
+	fakeDataFile := newFakeDataFile([][]byte{
+		[]byte{}, []byte{}, []byte{},
+	})
+
+	blocksThatWereWritten := []uint16{}
+	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+		blocksThatWereWritten = append(blocksThatWereWritten, id)
+		return nil
+	}
+
+	buffer := core.NewDataBuffer(fakeDataFile, 3)
+
+	// Read the 3 blocks and flag two as dirty
+	buffer.FetchBlock(0)
+	buffer.MarkAsDirty(0)
+
+	buffer.FetchBlock(1)
+	// Not dirty
+
+	buffer.FetchBlock(2)
+	buffer.MarkAsDirty(2)
+
+	if err := buffer.Sync(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(blocksThatWereWritten) != 2 {
+		t.Fatalf("Should have written 2 blocks, wrote %d", len(blocksThatWereWritten))
+	}
+
+	if blocksThatWereWritten[0] != 0 {
+		t.Error("Should have written the block 0")
+	}
+
+	if blocksThatWereWritten[1] != 2 {
+		t.Error("Should have written the block 2")
+	}
+}
+
+func TestReturnsErrorsWhenSyncing(t *testing.T) {
+	fakeDataFile := newFakeDataFile([][]byte{
+		[]byte{}, []byte{},
+	})
+	expectedError := errors.New("BOOM")
+	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+		return expectedError
+	}
+
+	buffer := core.NewDataBuffer(fakeDataFile, 2)
+
+	buffer.FetchBlock(0)
+	buffer.FetchBlock(1)
+	if err := buffer.Sync(); err != nil {
+		t.Fatal("Unexpected error", err)
+	}
+
+	buffer.MarkAsDirty(1)
+	err := buffer.Sync()
+	if err == nil {
+		t.Fatal("Error not raised")
+	} else if err != expectedError {
+		t.Fatal("Unknown error raised")
 	}
 }
 

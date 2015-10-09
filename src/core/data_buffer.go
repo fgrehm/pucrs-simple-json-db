@@ -1,13 +1,9 @@
 package core
 
-import (
-	"errors"
-)
-
 type DataBuffer interface {
 	FetchBlock(id uint16) (*Datablock, error)
 	MarkAsDirty(id uint16) error
-	Flush() error
+	Sync() error
 }
 
 type dataBuffer struct {
@@ -82,8 +78,17 @@ func (db *dataBuffer) MarkAsDirty(id uint16) error {
 	return nil
 }
 
-func (db *dataBuffer) Flush() error {
-	return errors.New("Not implemented yet")
+func (db *dataBuffer) Sync() error {
+	for id, frame := range db.idToFrame {
+		if !frame.isDirty {
+			continue
+		}
+
+		if err := db.df.WriteBlock(id, frame.data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *dataBuffer) evictOldestFrame() error {
