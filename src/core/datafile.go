@@ -17,7 +17,7 @@ var (
 )
 
 type Datafile interface {
-	Close()
+	Close() error
 	ReadBlock(id uint16, data []byte) error
 	WriteBlock(id uint16, data []byte) error
 }
@@ -75,8 +75,9 @@ func (df *datafile) WriteBlock(id uint16, data []byte) error {
 	return nil
 }
 
-func (df *datafile) Close() {
-	df.file.Close()
+func (df *datafile) Close() error {
+	log.Println("Closing datafile")
+	return df.file.Close()
 }
 
 // func (df *datafile) WriteInt16(position int64, i uint16) error {

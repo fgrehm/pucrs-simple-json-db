@@ -207,18 +207,19 @@ func TestReturnsErrorsWhenSyncing(t *testing.T) {
 
 type inMemoryDataFile struct {
 	blocks         [][]byte
-	closeFunc      func()
+	closeFunc      func() error
 	readBlockFunc  func(uint16, []byte) error
 	writeBlockFunc func(uint16, []byte) error
 }
 
 func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
 	return &inMemoryDataFile{
-		blocks:    blocks,
-		closeFunc: func() {}, // NOOP by default
+		blocks: blocks,
+		closeFunc: func() error {
+			return nil // NOOP by default
+		},
 		writeBlockFunc: func(id uint16, data []byte) error {
-			// NOOP by default
-			return nil
+			return nil // NOOP by default
 		},
 		readBlockFunc: func(id uint16, data []byte) error {
 			block := blocks[id]
@@ -230,8 +231,8 @@ func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
 	}
 }
 
-func (df *inMemoryDataFile) Close() {
-	df.closeFunc()
+func (df *inMemoryDataFile) Close() error {
+	return df.closeFunc()
 }
 func (df *inMemoryDataFile) ReadBlock(id uint16, data []byte) error {
 	return df.readBlockFunc(id, data)
