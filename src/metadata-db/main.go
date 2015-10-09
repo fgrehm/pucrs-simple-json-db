@@ -7,27 +7,17 @@ import (
 )
 
 func main() {
-	df, err := core.NewDatafile("metadata-db.dat")
+	db, err := core.NewMetaDB("metadata-db.dat")
 	if err != nil {
 		panic(err)
 	}
-	defer df.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
-	dataBuffer := core.NewDataBuffer(df, 256)
-
-	block, err := dataBuffer.FetchBlock(0)
-	if err != nil {
-		panic(err)
-	}
-	log.Println(core.DatablockByteOrder.Uint16(block.Data[0:2]))
-
-	block.Data[0] = 0x99
-	block.Data[1] = 0x99
-	dataBuffer.MarkAsDirty(0)
-
-	for i := 1; i < 257; i++ {
-		dataBuffer.FetchBlock(uint16(i))
-	}
+	log.Println(db.InsertRecord("AN STRING!!!"))
 
 	// Test reading / writing blocks and bitmaps
 	//

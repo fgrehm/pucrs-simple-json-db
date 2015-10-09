@@ -26,7 +26,7 @@ type datafile struct {
 	file *os.File
 }
 
-func NewDatafile(filename string) (Datafile, error) {
+func newDatafile(filename string) (Datafile, error) {
 	file, err := openDatafile(filename)
 	if err != nil {
 		return nil, err
@@ -70,9 +70,7 @@ func (df *datafile) WriteBlock(id uint16, data []byte) error {
 	if _, err := df.file.Write(data); err != nil {
 		return err
 	}
-	df.file.Sync()
-
-	return nil
+	return df.file.Sync()
 }
 
 func (df *datafile) Close() error {
