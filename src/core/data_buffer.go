@@ -87,6 +87,8 @@ func (db *dataBuffer) Sync() error {
 		if err := db.df.WriteBlock(id, frame.data); err != nil {
 			return err
 		}
+
+		frame.isDirty = false
 	}
 	return nil
 }

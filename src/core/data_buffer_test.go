@@ -177,6 +177,15 @@ func TestSavesDirtyFramesOnSync(t *testing.T) {
 	if blocksThatWereWritten[0] != 2 && blocksThatWereWritten[1] != 2 {
 		t.Errorf("Should have written the block 2, wrote %v", blocksThatWereWritten)
 	}
+
+	blocksThatWereWritten = []uint16{}
+	if err := buffer.Sync(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(blocksThatWereWritten) != 0 {
+		t.Fatalf("Blocks have already been writen, wrote %v again", blocksThatWereWritten)
+	}
 }
 
 func TestReturnsErrorsWhenSyncing(t *testing.T) {
