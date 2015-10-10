@@ -32,13 +32,13 @@ func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if DatablockByteOrder.Uint64(block.Data[0:8]) == 0 {
+	if block.ReadUint64(0) == 0 {
 		log.Println("Initializing datafile")
 
 		// Next ID = 1
-		DatablockByteOrder.PutUint64(block.Data[0:8], 1)
+		block.Write(0, uint64(1))
 		// Next Available Datablock = 1
-		DatablockByteOrder.PutUint16(block.Data[8:10], 1)
+		block.Write(8, uint16(1))
 
 		dataBuffer.MarkAsDirty(0)
 		if err = dataBuffer.Sync(); err != nil {
@@ -59,15 +59,13 @@ func (m *metaDb) InsertRecord(data string) (uint64, error) {
 		return 0, err
 	}
 
-	recordId := DatablockByteOrder.Uint64(block.Data[0:8])
-	insertBlockId := DatablockByteOrder.Uint16(block.Data[8:10])
+	recordId := block.ReadUint64(0)
+	insertBlockId := block.ReadUint16(8)
 	// Next ID
-	DatablockByteOrder.PutUint64(block.Data[0:8], recordId+1)
+	block.Write(0, recordId+1)
 
 	block, err = m.buffer.FetchBlock(insertBlockId)
-	for index, char := range []byte(data) {
-		block.Data[index] = char
-	}
+	block.Write(0, data)
 
 	m.buffer.MarkAsDirty(0)
 	m.buffer.MarkAsDirty(1)
