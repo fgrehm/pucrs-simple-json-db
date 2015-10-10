@@ -1,13 +1,13 @@
 package core
 
 type DataBuffer interface {
-	FetchBlock(id uint16) (*Datablock, error)
+	FetchBlock(id uint16) (*DataBlock, error)
 	MarkAsDirty(id uint16) error
 	Sync() error
 }
 
 type dataBuffer struct {
-	df          Datafile
+	df          DataFile
 	frames      []*bufferFrame          // Reusable frames of memory
 	idToFrame   map[uint16]*bufferFrame // Used for mapping an id to a buffer on the frames array
 	nextVictims []uint16
@@ -21,7 +21,7 @@ type bufferFrame struct {
 	data     []byte
 }
 
-func NewDataBuffer(df Datafile, size int) DataBuffer {
+func NewDataBuffer(df DataFile, size int) DataBuffer {
 	// Reusable array of buffers
 	frames := make([]*bufferFrame, 0, size)
 	for i := 0; i < size; i++ {
@@ -41,10 +41,10 @@ func NewDataBuffer(df Datafile, size int) DataBuffer {
 	}
 }
 
-func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
+func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 	frame, present := db.idToFrame[id]
 	if present {
-		return &Datablock{ID: id, Data: frame.data}, nil
+		return &DataBlock{ID: id, Data: frame.data}, nil
 	} else {
 		if len(db.nextVictims) == db.size {
 			if err := db.evictOldestFrame(); err != nil {
@@ -68,7 +68,7 @@ func (db *dataBuffer) FetchBlock(id uint16) (*Datablock, error) {
 		db.nextVictims = append(db.nextVictims, id)
 		db.idToFrame[id] = frame
 
-		return &Datablock{ID: id, Data: frame.data}, nil
+		return &DataBlock{ID: id, Data: frame.data}, nil
 	}
 }
 

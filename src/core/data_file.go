@@ -16,7 +16,7 @@ var (
 	DatablockByteOrder = binary.BigEndian
 )
 
-type Datafile interface {
+type DataFile interface {
 	Close() error
 	ReadBlock(id uint16, data []byte) error
 	WriteBlock(id uint16, data []byte) error
@@ -26,7 +26,7 @@ type datafile struct {
 	file *os.File
 }
 
-func newDatafile(filename string) (Datafile, error) {
+func newDatafile(filename string) (DataFile, error) {
 	file, err := openDatafile(filename)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func newDatafile(filename string) (Datafile, error) {
 
 func openDatafile(filename string) (*os.File, error) {
 	if _, err := os.Stat(filename); err == nil {
-		log.Println("Datafile exists, reusing it")
+		log.Println("DataFile exists, reusing it")
 		return os.OpenFile(filename, os.O_RDWR, 0666)
 	}
 

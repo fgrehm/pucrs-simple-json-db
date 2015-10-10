@@ -7,7 +7,7 @@ import (
 )
 
 func TestInitializesDataFile(t *testing.T) {
-	firstDataBlock := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	firstDataBlock := make([]byte, 10)
 	fakeDataFile := newFakeDataFile([][]byte{firstDataBlock})
 
 	core.NewMetaDBWithDataFile(fakeDataFile)

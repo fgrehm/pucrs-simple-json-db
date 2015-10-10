@@ -10,11 +10,11 @@ type MetaDB interface {
 	InsertRecord(data string) (uint64, error)
 	Close() error
 	// FindRecord(id uint64) (*Record, error)
-	// SearchFor(key, value string) ([]*Record, error)
+	// SearchFor(key, value string) (<-chan Record, error)
 }
 
 type metaDb struct {
-	dataFile Datafile
+	dataFile DataFile
 	buffer   DataBuffer
 }
 
@@ -26,7 +26,7 @@ func NewMetaDB(datafilePath string) (MetaDB, error) {
 	return NewMetaDBWithDataFile(df)
 }
 
-func NewMetaDBWithDataFile(dataFile Datafile) (MetaDB, error) {
+func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 	dataBuffer := NewDataBuffer(dataFile, BUFFER_SIZE)
 	block, err := dataBuffer.FetchBlock(0)
 	if err != nil {
