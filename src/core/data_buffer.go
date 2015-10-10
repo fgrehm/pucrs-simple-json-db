@@ -72,19 +72,19 @@ func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 	}
 }
 
-func (db *dataBuffer) MarkAsDirty(id uint16) error {
-	frame := db.idToFrame[id]
+func (db *dataBuffer) MarkAsDirty(dataBlockId uint16) error {
+	frame := db.idToFrame[dataBlockId]
 	frame.isDirty = true
 	return nil
 }
 
 func (db *dataBuffer) Sync() error {
-	for id, frame := range db.idToFrame {
+	for dataBlockId, frame := range db.idToFrame {
 		if !frame.isDirty {
 			continue
 		}
 
-		if err := db.df.WriteBlock(id, frame.data); err != nil {
+		if err := db.df.WriteBlock(dataBlockId, frame.data); err != nil {
 			return err
 		}
 
