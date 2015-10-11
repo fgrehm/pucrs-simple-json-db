@@ -49,10 +49,7 @@ func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 }
 
 func (m *metaDb) InsertRecord(data string) (uint32, error) {
-	// Find out if data fits in a block in advance (chained rows will come later)
-	// Find out the next available datablock
-	//   Read datablock zero, find out the first block has space available for insertion
-	// Assign an ID and increment it (and flag the corresponding datablock that stores the ID as dirty on buffer)
+	// TODO: Find out if data fits in a block in advance (chained rows will come later)
 
 	block, err := m.buffer.FetchBlock(0)
 	if err != nil {
@@ -66,8 +63,12 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	m.buffer.MarkAsDirty(block.ID)
 
 	block, err = m.buffer.FetchBlock(insertBlockId)
-	block.Write(0, data)
-	m.buffer.MarkAsDirty(block.ID)
+	if err != nil {
+		return 0, err
+	}
+
+	record := &Record{ID: recordId, Data: data}
+	m.allocateRecord(record, block)
 
 	return recordId, nil
 }
@@ -77,4 +78,44 @@ func (m *metaDb) Close() error {
 		return err
 	}
 	return m.dataFile.Close()
+}
+
+func (m *metaDb) allocateRecord(record *Record, initialDataBlock *DataBlock) {
+	initialDataBlock.Write(0, record.Data)
+	m.buffer.MarkAsDirty(initialDataBlock.ID)
+
+	// A datablock will have at least 2 bytes to store its utilization, if it
+	// is currently zero, it means it is a brand new block
+	utilization := initialDataBlock.ReadUint16(DATABLOCK_SIZE - 2)
+	if utilization == 0 {
+		utilization = 2
+	}
+
+	// Header
+	headerSize := 12
+	headerPtr := DATABLOCK_SIZE - 1 - headerSize - 6 // 2 for utilization and 4 for next / prev block pointers
+
+	// Le ID
+	initialDataBlock.Write(headerPtr, record.ID)
+	headerPtr += 4
+
+	// TODO: Calculate where the record starts
+	recordStart := uint16(0)
+	initialDataBlock.Write(headerPtr, recordStart)
+	headerPtr += 2
+
+	// Record size
+	recordSize := uint16(len(record.Data))
+	initialDataBlock.Write(headerPtr, recordSize)
+	headerPtr += 2
+
+	// TODO: 4 bytes for chained rows
+
+	utilization += uint16(headerSize) + recordSize
+	initialDataBlock.Write(DATABLOCK_SIZE-2, utilization)
+	m.buffer.MarkAsDirty(initialDataBlock.ID)
+
+	// - Records data
+	// - End the end of the datablock:
+	//   - 4 bytes for pointer to previous and next data blocks on the linked list of data blocks of a given type (index or actual data, 2 points each)
 }

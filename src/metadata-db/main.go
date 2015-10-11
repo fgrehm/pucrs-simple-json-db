@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"core"
 )
@@ -17,8 +18,9 @@ func main() {
 		}
 	}()
 
-	log.Println(db.InsertRecord("1sAN sTRi¬'^sNG!!!"))
-	log.Println(db.InsertRecord("1sAN sTRi¬'^sNG!!!"))
+	now := time.Now().Format("Mon Jan 2 15:04:05 MST 2006")
+	log.Println("Will insert", now)
+	log.Println(db.InsertRecord(now))
 
 	// Test reading / writing blocks and bitmaps
 	//

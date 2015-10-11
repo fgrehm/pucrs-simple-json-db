@@ -1,6 +1,6 @@
 package core
 
 type Record struct {
-	ID   uint64
+	ID   uint32
 	Data string
 }
