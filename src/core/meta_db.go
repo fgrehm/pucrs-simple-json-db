@@ -7,7 +7,7 @@ import (
 const BUFFER_SIZE = 256
 
 type MetaDB interface {
-	InsertRecord(data string) (uint64, error)
+	InsertRecord(data string) (uint32, error)
 	Close() error
 	// FindRecord(id uint64) (*Record, error)
 	// SearchFor(key, value string) (<-chan Record, error)
@@ -32,15 +32,15 @@ func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if block.ReadUint64(0) == 0 {
+	if block.ReadUint32(0) == 0 {
 		log.Println("Initializing datafile")
 
 		// Next ID = 1
-		block.Write(0, uint64(1))
+		block.Write(0, uint32(1))
 		// Next Available Datablock = 1
-		block.Write(8, uint16(1))
+		block.Write(4, uint16(1))
 
-		dataBuffer.MarkAsDirty(0)
+		dataBuffer.MarkAsDirty(block.ID)
 		if err = dataBuffer.Sync(); err != nil {
 			return nil, err
 		}
@@ -48,7 +48,7 @@ func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 	return &metaDb{dataFile, dataBuffer}, nil
 }
 
-func (m *metaDb) InsertRecord(data string) (uint64, error) {
+func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	// Find out if data fits in a block in advance (chained rows will come later)
 	// Find out the next available datablock
 	//   Read datablock zero, find out the first block has space available for insertion
@@ -59,16 +59,15 @@ func (m *metaDb) InsertRecord(data string) (uint64, error) {
 		return 0, err
 	}
 
-	recordId := block.ReadUint64(0)
-	insertBlockId := block.ReadUint16(8)
+	recordId := block.ReadUint32(0)
+	insertBlockId := block.ReadUint16(4)
 	// Next ID
 	block.Write(0, recordId+1)
+	m.buffer.MarkAsDirty(block.ID)
 
 	block, err = m.buffer.FetchBlock(insertBlockId)
 	block.Write(0, data)
-
-	m.buffer.MarkAsDirty(0)
-	m.buffer.MarkAsDirty(1)
+	m.buffer.MarkAsDirty(block.ID)
 
 	return recordId, nil
 }

@@ -12,11 +12,11 @@ func TestInitializesDataFile(t *testing.T) {
 
 	core.NewMetaDBWithDataFile(fakeDataFile)
 
-	if !slicesEqual(firstDataBlock[0:8], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}) {
+	if !slicesEqual(firstDataBlock[0:4], []byte{0x00, 0x00, 0x00, 0x01}) {
 		t.Error("Did not set the next id to 1")
 	}
 
-	if !slicesEqual(firstDataBlock[8:10], []byte{0x00, 0x01}) {
+	if !slicesEqual(firstDataBlock[4:6], []byte{0x00, 0x01}) {
 		t.Error("Did not set the data block pointer to 1")
 	}
 }
