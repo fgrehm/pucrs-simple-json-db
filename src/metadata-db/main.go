@@ -18,7 +18,7 @@ func main() {
 		}
 	}()
 
-	now := time.Now().Format("Mon Jan 2 15:04:05 MST 2006")
+	now := time.Now().Format("2006-01-02T15:04:05MST")
 	log.Println("Will insert", now)
 	log.Println(db.InsertRecord(now))
 

@@ -77,11 +77,3 @@ func (df *datafile) Close() error {
 	log.Println("Closing datafile")
 	return df.file.Close()
 }
-
-// func (df *datafile) WriteInt16(position int64, i uint16) error {
-// 	if _, err := df.file.Seek(position, 0); err != nil {
-// 		return err
-// 	}
-// 	log.Printf("Writing int16 `%d`", i)
-// 	return binary.Write(df.file, DatablockByteOrder, i)
-// }

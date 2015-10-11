@@ -25,8 +25,10 @@ func (db *DataBlock) Write(position int, v interface{}) {
 	switch x := v.(type) {
 	case string:
 		lastPosition := position + len(x)
-		for i := position; i < lastPosition; i++ {
-			db.Data[i] = byte(x[i])
+		i := 0
+		for target := position; target < lastPosition; target++ {
+			db.Data[target] = byte(x[i])
+			i++
 		}
 	case uint16:
 		DatablockByteOrder.PutUint16(db.Data[position:position+2], x)
