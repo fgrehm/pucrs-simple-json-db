@@ -4,10 +4,7 @@ import (
 	"log"
 )
 
-const (
-	BUFFER_SIZE        = 256
-	RECORD_HEADER_SIZE = uint16(12)
-)
+const BUFFER_SIZE = 256
 
 type MetaDB interface {
 	InsertRecord(data string) (uint32, error)

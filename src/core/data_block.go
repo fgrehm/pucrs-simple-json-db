@@ -23,11 +23,11 @@ func (db *DataBlock) ReadString(startingAt, length int) string {
 
 func (db *DataBlock) Write(position int, v interface{}) {
 	switch x := v.(type) {
-	case string:
+	case []byte:
 		lastPosition := position + len(x)
 		i := 0
 		for target := position; target < lastPosition; target++ {
-			db.Data[target] = byte(x[i])
+			db.Data[target] = x[i]
 			i++
 		}
 	case uint16:
