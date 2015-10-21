@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"log"
 )
 
@@ -8,9 +9,19 @@ const BUFFER_SIZE = 256
 
 type MetaDB interface {
 	InsertRecord(data string) (uint32, error)
+	FindRecord(id uint32) (*Record, error)
 	Close() error
-	// FindRecord(id uint64) (*Record, error)
-	// SearchFor(key, value string) (<-chan Record, error)
+}
+
+type Record struct {
+	ID   uint32
+	Data string
+}
+
+type RowID struct {
+	RecordID    uint32
+	DataBlockID uint16
+	LocalID     uint16
 }
 
 type metaDb struct {
@@ -48,8 +59,16 @@ func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
 	return &metaDb{dataFile, dataBuffer}, nil
 }
 
+func (m *metaDb) Close() error {
+	if err := m.buffer.Sync(); err != nil {
+		return err
+	}
+	return m.dataFile.Close()
+}
+
 func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	// TODO: Find out if data fits in a block in advance (chained rows will come later)
+	// TODO: Most of this logic can also be moved into the allocator object
 
 	block, err := m.buffer.FetchBlock(0)
 	if err != nil {
@@ -66,13 +85,36 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	if err = allocator.Run(record); err != nil {
 		return 0, err
 	}
+	// TODO: After inserting the record, need to update the BTree+ index
 
 	return recordId, nil
 }
 
-func (m *metaDb) Close() error {
-	if err := m.buffer.Sync(); err != nil {
-		return err
+func (m *metaDb) FindRecord(id uint32) (*Record, error) {
+	rowID, err := m.findRowID(id)
+	if err != nil {
+		return nil, err
 	}
-	return m.dataFile.Close()
+
+	return newRecordFinder(m.buffer).Find(rowID)
+}
+
+// HACK: Temporary workaround while we don't have the BTree+ in place
+func (m *metaDb) findRowID(needle uint32) (RowID, error) {
+	// FIXME: Needs to deal with records on a block != 1
+	block, err := m.buffer.FetchBlock(1)
+	if err != nil {
+		return RowID{}, err
+	}
+
+	rba := &recordBlockAdapter{block}
+	for i, id := range rba.IDs() {
+		if id == needle {
+			return RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
+		}
+	}
+
+	// Parse headers in use and try to find the ID being looked up
+
+	return RowID{}, errors.New("Not found")
 }

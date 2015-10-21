@@ -56,7 +56,7 @@ func (df *datafile) ReadBlock(id uint16, data []byte) error {
 	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
 		return err
 	}
-	log.Printf("Reading datablock %016d", id)
+	log.Printf("Reading datablock %010d", id)
 	reader := &io.LimitedReader{df.file, DATABLOCK_SIZE}
 	_, err := reader.Read(data)
 	return err

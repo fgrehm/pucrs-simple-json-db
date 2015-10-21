@@ -33,6 +33,8 @@ func (ra *recordAllocator) Run(record *Record) error {
 	//       of bytes written returned by `adapter.Add` to decide
 	//       Don't forget to `adapter.SetNextRowID(localID, nextBlockID, nextLocalID)`
 	//       and `ra.buffer.MarkAsDirty(nextBlockID)`
+	//       Also need to take into consideration the linked list of data blocks and
+	//       update pointers when allocating a new datablock
 
 	adapter := newRecordBlockAdapter(initialDataBlock)
 	_, localID := adapter.Add(record.ID, []byte(record.Data[0:len(record.Data)]))
