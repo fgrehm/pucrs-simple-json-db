@@ -107,14 +107,22 @@ func (m *metaDb) findRowID(needle uint32) (RowID, error) {
 		return RowID{}, err
 	}
 
-	rba := &recordBlockAdapter{block}
-	for i, id := range rba.IDs() {
-		if id == needle {
-			return RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
+	for {
+		rba := &recordBlockAdapter{block}
+		for i, id := range rba.IDs() {
+			if id == needle {
+				return RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
+			}
+		}
+
+		nextBlockID := rba.NextBlockID()
+		if nextBlockID != 0 {
+			block, err = m.buffer.FetchBlock(nextBlockID)
+			if err != nil {
+				return RowID{}, err
+			}
+		} else {
+			return RowID{}, errors.New("Not found")
 		}
 	}
-
-	// Parse headers in use and try to find the ID being looked up
-
-	return RowID{}, errors.New("Not found")
 }

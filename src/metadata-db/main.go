@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"time"
+
+	_ "github.com/icrowley/fake"
 
 	"core"
 )
@@ -18,9 +20,37 @@ func main() {
 		}
 	}()
 
-	now := time.Now().Format("2006-01-02T15:04:05MST")
-	log.Println("Will insert", now)
-	log.Println(db.InsertRecord(now))
+	// now := time.Now().Format("2006-01-02T15:04:05MST")
+	// json := `{"name":"` + fake.FullName() + `","company":"` + fake.Company() + `","city":"` + fake.City() + `","created_at":"` + now + `"}`
+	// log.Println("Will insert", json)
+	// id, err := db.InsertRecord(json)
+	// log.Printf("ID:     %d", id)
+	// log.Printf("Error:  %+v", err)
+
+	// record, err := db.FindRecord(1)
+	// log.Printf("Record: %+v", record)
+	// log.Printf("Error:  %+v", err)
+
+	// record, err = db.FindRecord(2)
+	// log.Printf("Record: %+v", record)
+	// log.Printf("Error:  %+v", err)
+
+	for i := 0; i < 100; i++ {
+		data := fmt.Sprintf(`{"a":%d}`, i)
+		id, err := db.InsertRecord(data)
+		if err != nil {
+			log.Fatalf("Unexpected error returned '%s'", err)
+		}
+		log.Println("New record ID", id)
+
+		record, err := db.FindRecord(id)
+		if err != nil {
+			log.Fatalf("Unexpected error returned '%s'", err)
+		}
+		if record.Data != data {
+			log.Fatalf("Unexpected data returned (%s)", record.Data)
+		}
+	}
 
 	// Test reading / writing blocks and bitmaps
 	//

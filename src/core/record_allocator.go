@@ -21,12 +21,7 @@ func (ra *recordAllocator) Run(record *Record) error {
 	if err != nil {
 		return err
 	}
-	insertBlockId := block.ReadUint16(4)
-
-	initialDataBlock, err := ra.buffer.FetchBlock(insertBlockId)
-	if err != nil {
-		return err
-	}
+	insertBlockID := block.ReadUint16(4)
 
 	// TODO: Check if the record fits the data block fetched. In case it doesn't fit,
 	//       "slice" the data into multiple blocks (aka chained rows). Use the amount
@@ -36,11 +31,40 @@ func (ra *recordAllocator) Run(record *Record) error {
 	//       Also need to take into consideration the linked list of data blocks and
 	//       update pointers when allocating a new datablock
 
-	adapter := newRecordBlockAdapter(initialDataBlock)
-	_, localID := adapter.Add(record.ID, []byte(record.Data[0:len(record.Data)]))
-	log.Println("New record RowID:", initialDataBlock.ID, localID)
+	for {
+		block, err := ra.buffer.FetchBlock(insertBlockID)
+		if err != nil {
+			return err
+		}
+		adapter := newRecordBlockAdapter(block)
 
-	ra.buffer.MarkAsDirty(initialDataBlock.ID)
+		fitsOnDataBlock := (int(adapter.FreeSpace()) - len(record.Data) - int(RECORD_HEADER_SIZE)) > 0
+		if fitsOnDataBlock {
+			_, _ = adapter.Add(record.ID, []byte(record.Data[0:len(record.Data)]))
+			// log.Println("New record RowID:", block.ID, localID)
+			break
+		}
 
+		if adapter.NextBlockID() != 0 {
+			insertBlockID = adapter.NextBlockID()
+			continue
+		}
+
+		// FIXME: Deal with Datafile with no space left
+
+		currBlockID := insertBlockID
+		insertBlockID++
+		log.Printf("Allocating a new datablock (%d)", insertBlockID)
+		adapter.SetNextBlockID(insertBlockID)
+		block, err = ra.buffer.FetchBlock(insertBlockID)
+		if err != nil {
+			return err
+		}
+		newRecordBlockAdapter(block).SetPrevBlockID(currBlockID)
+
+		ra.buffer.MarkAsDirty(currBlockID)
+	}
+
+	ra.buffer.MarkAsDirty(insertBlockID)
 	return nil
 }

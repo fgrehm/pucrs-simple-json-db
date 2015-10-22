@@ -1,8 +1,12 @@
 package core
 
 type RecordBlockAdapter interface {
+	FreeSpace() uint16
 	Utilization() uint16
 	Add(recordID uint32, data []byte) (uint16, uint16)
+	NextBlockID() uint16
+	SetNextBlockID(blockID uint16)
+	SetPrevBlockID(blockID uint16)
 	ReadRecordData(localID uint16) string
 }
 
@@ -11,6 +15,10 @@ const (
 	HEADER_OFFSET_RECORD_START = 4
 	HEADER_OFFSET_RECORD_SIZE  = HEADER_OFFSET_RECORD_START + 2
 	RECORD_HEADER_SIZE         = uint16(12)
+
+	// A datablock will have at least 8 bytes to store its utilization, total
+	// records count and prev / next datablock pointers
+	MIN_UTILIZATION = 8
 
 	POS_UTILIZATION   = DATABLOCK_SIZE - 2
 	POS_TOTAL_RECORDS = POS_UTILIZATION - 2
@@ -80,13 +88,23 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 }
 
 func (rba *recordBlockAdapter) Utilization() uint16 {
-	// A datablock will have at least 2 bytes to store its utilization, if it
-	// is currently zero, it means it is a brand new block
 	utilization := rba.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
-		utilization = 2
+		utilization = MIN_UTILIZATION
 	}
 	return utilization
+}
+
+func (rba *recordBlockAdapter) NextBlockID() uint16 {
+	return rba.block.ReadUint16(POS_NEXT_BLOCK)
+}
+
+func (rba *recordBlockAdapter) SetNextBlockID(blockID uint16) {
+	rba.block.Write(POS_NEXT_BLOCK, blockID)
+}
+
+func (rba *recordBlockAdapter) SetPrevBlockID(blockID uint16) {
+	rba.block.Write(POS_PREV_BLOCK, blockID)
 }
 
 func (rba *recordBlockAdapter) ReadRecordData(localID uint16) string {
@@ -96,15 +114,20 @@ func (rba *recordBlockAdapter) ReadRecordData(localID uint16) string {
 	return string(rba.block.Data[start:end])
 }
 
+func (rba *recordBlockAdapter) FreeSpace() uint16 {
+	return DATABLOCK_SIZE - rba.Utilization()
+}
+
 // HACK: Temporary, meant to be around while we don't have a btree in place
 func (rba *recordBlockAdapter) IDs() []uint32 {
-	totalRecords := rba.block.ReadUint16(DATABLOCK_SIZE - 4)
+	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
 	ids := []uint32{}
 
 	for i := uint16(0); i < totalRecords; i++ {
-		headerPtr := DATABLOCK_SIZE - 8
-		headerPtr -= int((i+1)*RECORD_HEADER_SIZE) + 1
-		ids = append(ids, rba.block.ReadUint32(headerPtr))
+		headerPtr := int(POS_FIRST_HEADER - i*RECORD_HEADER_SIZE)
+		id := rba.block.ReadUint32(headerPtr)
+
+		ids = append(ids, id)
 	}
 
 	return ids
