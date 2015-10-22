@@ -6,7 +6,18 @@ type RecordBlockAdapter interface {
 	ReadRecordData(localID uint16) string
 }
 
-const RECORD_HEADER_SIZE = uint16(12)
+const (
+	HEADER_OFFSET_RECORD_ID    = 0
+	HEADER_OFFSET_RECORD_START = 4
+	HEADER_OFFSET_RECORD_SIZE  = HEADER_OFFSET_RECORD_START + 2
+	RECORD_HEADER_SIZE         = uint16(12)
+
+	POS_UTILIZATION   = DATABLOCK_SIZE - 2
+	POS_TOTAL_RECORDS = POS_UTILIZATION - 2
+	POS_NEXT_BLOCK    = POS_TOTAL_RECORDS - 2
+	POS_PREV_BLOCK    = POS_NEXT_BLOCK - 2
+	POS_FIRST_HEADER  = POS_PREV_BLOCK - RECORD_HEADER_SIZE - 1
+)
 
 type recordBlockAdapter struct {
 	block *DataBlock
@@ -28,35 +39,30 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 	recordSize := uint16(len(data))
 
 	// Records present on the block
-	totalRecords := rba.block.ReadUint16(DATABLOCK_SIZE - 4)
+	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
 
 	// Calculate where the record starts
 	var recordPtr int
 	if totalRecords == 0 {
 		recordPtr = 0
 	} else {
-		lastHeaderPtr := DATABLOCK_SIZE - 8 - int(totalRecords*RECORD_HEADER_SIZE) - 1
 		// Starts where the last record ends
+		lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalRecords-1)*RECORD_HEADER_SIZE)
 		// FIXME: This will fail once we have deletion implemented
 		recordPtr = int(rba.block.ReadUint16(lastHeaderPtr+4) + rba.block.ReadUint16(lastHeaderPtr+6))
 	}
 
 	// Header
-	// 2 for utilization, 2 for total records, 4 for next / prev block pointers
-	newHeaderPtr := (DATABLOCK_SIZE - 1) - 8
-	newHeaderPtr -= int((totalRecords + 1) * RECORD_HEADER_SIZE)
+	newHeaderPtr := int(POS_FIRST_HEADER - totalRecords*RECORD_HEADER_SIZE)
 
 	// Le ID
-	rba.block.Write(newHeaderPtr, recordID)
-	newHeaderPtr += 4
+	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, recordID)
 
 	// Where the record starts
-	rba.block.Write(newHeaderPtr, uint16(recordPtr))
-	newHeaderPtr += 2
+	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_START, uint16(recordPtr))
 
 	// Record size
-	rba.block.Write(newHeaderPtr, recordSize)
-	newHeaderPtr += 2
+	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, recordSize)
 
 	// TODO: 4 bytes for chained rows
 
@@ -64,8 +70,8 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 	rba.block.Write(recordPtr, data)
 	totalRecords += 1
 	utilization += RECORD_HEADER_SIZE + recordSize
-	rba.block.Write(DATABLOCK_SIZE-2, utilization)
-	rba.block.Write(DATABLOCK_SIZE-4, totalRecords)
+	rba.block.Write(POS_UTILIZATION, utilization)
+	rba.block.Write(POS_TOTAL_RECORDS, totalRecords)
 
 	// Used as the rowid
 	localID := totalRecords - 1
@@ -76,7 +82,7 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 func (rba *recordBlockAdapter) Utilization() uint16 {
 	// A datablock will have at least 2 bytes to store its utilization, if it
 	// is currently zero, it means it is a brand new block
-	utilization := rba.block.ReadUint16(DATABLOCK_SIZE - 2)
+	utilization := rba.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
 		utilization = 2
 	}
@@ -84,10 +90,9 @@ func (rba *recordBlockAdapter) Utilization() uint16 {
 }
 
 func (rba *recordBlockAdapter) ReadRecordData(localID uint16) string {
-	headerPtr := DATABLOCK_SIZE - 9
-	headerPtr -= int((localID + 1) * RECORD_HEADER_SIZE)
-	start := rba.block.ReadUint16(headerPtr + 4)
-	end := start + rba.block.ReadUint16(headerPtr+6)
+	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
+	start := rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
+	end := start + rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
 	return string(rba.block.Data[start:end])
 }
 
