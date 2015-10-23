@@ -45,8 +45,8 @@ func (ra *recordAllocator) Run(record *Record) error {
 			break
 		}
 
-		if adapter.NextBlockID() != 0 {
-			insertBlockID = adapter.NextBlockID()
+		if nextID := adapter.NextBlockID(); nextID != 0 {
+			insertBlockID = nextID
 			continue
 		}
 

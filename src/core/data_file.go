@@ -53,7 +53,7 @@ func openDatafile(filename string) (*os.File, error) {
 }
 
 func (df *datafile) ReadBlock(id uint16, data []byte) error {
-	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
+	if err := df.seek(id); err != nil {
 		return err
 	}
 	log.Printf("Reading datablock %010d", id)
@@ -63,7 +63,7 @@ func (df *datafile) ReadBlock(id uint16, data []byte) error {
 }
 
 func (df *datafile) WriteBlock(id uint16, data []byte) error {
-	if _, err := df.file.Seek(int64(id*DATABLOCK_SIZE), 0); err != nil {
+	if err := df.seek(id); err != nil {
 		return err
 	}
 	log.Printf("Writing datablock %016d", id)
@@ -76,4 +76,9 @@ func (df *datafile) WriteBlock(id uint16, data []byte) error {
 func (df *datafile) Close() error {
 	log.Println("Closing datafile")
 	return df.file.Close()
+}
+
+func (df *datafile) seek(blockID uint16) error {
+	_, err := df.file.Seek(int64(blockID)*int64(DATABLOCK_SIZE), 0)
+	return err
 }

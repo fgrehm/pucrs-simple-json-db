@@ -35,17 +35,18 @@ func TestCreateAndRetrieve(t *testing.T) {
 }
 
 func TestCreateLotsOfRecords(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{
-		make([]byte, core.DATABLOCK_SIZE),
-		make([]byte, core.DATABLOCK_SIZE),
-		make([]byte, core.DATABLOCK_SIZE),
-	})
+	blocks := [][]byte{}
+	for i := 0; i < 26; i++ {
+		blocks = append(blocks, make([]byte, core.DATABLOCK_SIZE))
+	}
+
+	fakeDataFile := newFakeDataFile(blocks)
 	db, err := core.NewMetaDBWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)
 	}
 
-	for i := 0; i < 350; i++ {
+	for i := 0; i < 4500; i++ {
 		data := fmt.Sprintf(`{"a":%d}`, i)
 		id, err := db.InsertRecord(data)
 		if err != nil {
