@@ -1,5 +1,7 @@
 package core
 
+import "errors"
+
 type RecordBlockAdapter interface {
 	FreeSpace() uint16
 	Utilization() uint16
@@ -87,6 +89,24 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 	return bytesWritten, localID
 }
 
+func (rba *recordBlockAdapter) Remove(localID uint16) error {
+	// Records present on the block
+	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
+	if localID >= totalRecords {
+		return errors.New("Invalid local ID provided to `RecordBlockAdapter.Remove`")
+	}
+
+	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
+	rba.block.Write(headerPtr+HEADER_OFFSET_RECORD_ID, uint32(0))
+
+	// Utilization goes down just by the amount of data taken by the record, the
+	// header is kept around so we do not "free" up the space taken by it
+	utilization := rba.Utilization() - rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
+	rba.block.Write(POS_UTILIZATION, utilization)
+
+	return nil
+}
+
 func (rba *recordBlockAdapter) Utilization() uint16 {
 	utilization := rba.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
@@ -125,8 +145,7 @@ func (rba *recordBlockAdapter) IDs() []uint32 {
 
 	for i := uint16(0); i < totalRecords; i++ {
 		headerPtr := int(POS_FIRST_HEADER - i*RECORD_HEADER_SIZE)
-		id := rba.block.ReadUint32(headerPtr)
-
+		id := rba.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 		ids = append(ids, id)
 	}
 

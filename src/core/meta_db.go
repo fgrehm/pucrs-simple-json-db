@@ -9,6 +9,7 @@ const BUFFER_SIZE = 256
 
 type MetaDB interface {
 	InsertRecord(data string) (uint32, error)
+	RemoveRecord(id uint32) error
 	FindRecord(id uint32) (*Record, error)
 	Close() error
 }
@@ -67,9 +68,6 @@ func (m *metaDb) Close() error {
 }
 
 func (m *metaDb) InsertRecord(data string) (uint32, error) {
-	// TODO: Find out if data fits in a block in advance (chained rows will come later)
-	// TODO: Most of this logic can also be moved into the allocator object
-
 	block, err := m.buffer.FetchBlock(0)
 	if err != nil {
 		return 0, err
@@ -88,6 +86,21 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	// TODO: After inserting the record, need to update the BTree+ index
 
 	return recordId, nil
+}
+
+func (m *metaDb) RemoveRecord(id uint32) error {
+	rowID, err := m.findRowID(id)
+	if err != nil {
+		return err
+	}
+
+	block, err := m.buffer.FetchBlock(rowID.DataBlockID)
+	if err != nil {
+		return err
+	}
+
+	rba := &recordBlockAdapter{block}
+	return rba.Remove(rowID.LocalID)
 }
 
 func (m *metaDb) FindRecord(id uint32) (*Record, error) {
