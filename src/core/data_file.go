@@ -3,8 +3,9 @@ package core
 import (
 	"encoding/binary"
 	"io"
-	"log"
 	"os"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (

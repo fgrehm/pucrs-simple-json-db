@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
-	"log"
 
-	_ "github.com/icrowley/fake"
+	// _ "github.com/icrowley/fake"
+
+	log "github.com/Sirupsen/logrus"
 
 	"core"
 )
 
 func main() {
+	log.SetLevel(log.DebugLevel)
+
 	db, err := core.NewMetaDB("metadata-db.dat")
 	if err != nil {
 		panic(err)

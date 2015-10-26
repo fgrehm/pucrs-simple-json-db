@@ -2,7 +2,7 @@ package core
 
 import (
 	"errors"
-	"log"
+	log "github.com/Sirupsen/logrus"
 )
 
 const BUFFER_SIZE = 256

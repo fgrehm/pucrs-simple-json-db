@@ -1,7 +1,7 @@
 package core
 
 import (
-	"log"
+	log "github.com/Sirupsen/logrus"
 )
 
 type RecordAllocator interface {
