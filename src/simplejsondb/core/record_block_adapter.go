@@ -1,15 +1,23 @@
 package core
 
-import "errors"
+import (
+	"errors"
+
+	"simplejsondb/dbio"
+)
 
 type RecordBlockAdapter interface {
 	FreeSpace() uint16
 	Utilization() uint16
 	Add(recordID uint32, data []byte) (uint16, uint16)
+	Remove(localID uint16) error
 	NextBlockID() uint16
 	SetNextBlockID(blockID uint16)
 	SetPrevBlockID(blockID uint16)
 	ReadRecordData(localID uint16) string
+
+	// HACK: Temporary, meant to be around while we don't have a btree in place
+	IDs() []uint32
 }
 
 const (
@@ -22,7 +30,7 @@ const (
 	// records count and prev / next datablock pointers
 	MIN_UTILIZATION = 8
 
-	POS_UTILIZATION   = DATABLOCK_SIZE - 2
+	POS_UTILIZATION   = dbio.DATABLOCK_SIZE - 2
 	POS_TOTAL_RECORDS = POS_UTILIZATION - 2
 	POS_NEXT_BLOCK    = POS_TOTAL_RECORDS - 2
 	POS_PREV_BLOCK    = POS_NEXT_BLOCK - 2
@@ -30,7 +38,7 @@ const (
 )
 
 type recordBlockAdapter struct {
-	block *DataBlock
+	block *dbio.DataBlock
 }
 
 type recordHeader struct {
@@ -40,7 +48,7 @@ type recordHeader struct {
 	size     uint16
 }
 
-func newRecordBlockAdapter(block *DataBlock) RecordBlockAdapter {
+func NewRecordBlockAdapter(block *dbio.DataBlock) RecordBlockAdapter {
 	return &recordBlockAdapter{block}
 }
 
@@ -135,7 +143,7 @@ func (rba *recordBlockAdapter) ReadRecordData(localID uint16) string {
 }
 
 func (rba *recordBlockAdapter) FreeSpace() uint16 {
-	return DATABLOCK_SIZE - rba.Utilization()
+	return dbio.DATABLOCK_SIZE - rba.Utilization()
 }
 
 // HACK: Temporary, meant to be around while we don't have a btree in place

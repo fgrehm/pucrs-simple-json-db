@@ -1,4 +1,4 @@
-package core_test
+package test_utils
 
 // slicesEqual accepts two slices and returns a boolean
 // indicating whether they are equal.
@@ -8,7 +8,7 @@ package core_test
 // Note: This function DOES return a false positive for a sample
 // such as []int{1, 1, 2} == []int{1, 2, 2} because the bitmap can
 // not have duplicate values.
-func slicesEqual(s1, s2 []byte) bool {
+func SlicesEqual(s1, s2 []byte) bool {
 	if len(s1) != len(s2) {
 		return false
 	}
@@ -22,27 +22,27 @@ func slicesEqual(s1, s2 []byte) bool {
 
 // An in memory data file does what it says and allows us to avoid hitting
 // the FS during tests
-type inMemoryDataFile struct {
-	blocks         [][]byte
-	closeFunc      func() error
-	readBlockFunc  func(uint16, []byte) error
-	writeBlockFunc func(uint16, []byte) error
+type InMemoryDataFile struct {
+	Blocks         [][]byte
+	CloseFunc      func() error
+	ReadBlockFunc  func(uint16, []byte) error
+	WriteBlockFunc func(uint16, []byte) error
 }
 
-func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
-	return &inMemoryDataFile{
-		blocks: blocks,
-		closeFunc: func() error {
+func NewFakeDataFile(blocks [][]byte) *InMemoryDataFile {
+	return &InMemoryDataFile{
+		Blocks: blocks,
+		CloseFunc: func() error {
 			return nil // NOOP by default
 		},
-		writeBlockFunc: func(id uint16, data []byte) error {
+		WriteBlockFunc: func(id uint16, data []byte) error {
 			block := blocks[id]
 			for i := range block {
 				block[i] = data[i]
 			}
 			return nil // NOOP by default
 		},
-		readBlockFunc: func(id uint16, data []byte) error {
+		ReadBlockFunc: func(id uint16, data []byte) error {
 			block := blocks[id]
 			for i := 0; i < len(block); i++ {
 				data[i] = block[i]
@@ -52,12 +52,12 @@ func newFakeDataFile(blocks [][]byte) *inMemoryDataFile {
 	}
 }
 
-func (df *inMemoryDataFile) Close() error {
-	return df.closeFunc()
+func (df *InMemoryDataFile) Close() error {
+	return df.CloseFunc()
 }
-func (df *inMemoryDataFile) ReadBlock(id uint16, data []byte) error {
-	return df.readBlockFunc(id, data)
+func (df *InMemoryDataFile) ReadBlock(id uint16, data []byte) error {
+	return df.ReadBlockFunc(id, data)
 }
-func (df *inMemoryDataFile) WriteBlock(id uint16, data []byte) error {
-	return df.writeBlockFunc(id, data)
+func (df *InMemoryDataFile) WriteBlock(id uint16, data []byte) error {
+	return df.WriteBlockFunc(id, data)
 }

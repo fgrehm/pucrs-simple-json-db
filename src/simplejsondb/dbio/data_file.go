@@ -1,4 +1,4 @@
-package core
+package dbio
 
 import (
 	"encoding/binary"
@@ -27,7 +27,7 @@ type datafile struct {
 	file *os.File
 }
 
-func newDatafile(filename string) (DataFile, error) {
+func NewDatafile(filename string) (DataFile, error) {
 	file, err := openDatafile(filename)
 	if err != nil {
 		return nil, err

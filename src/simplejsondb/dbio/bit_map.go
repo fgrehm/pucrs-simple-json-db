@@ -3,7 +3,7 @@
 //
 // [1] - https://github.com/ShawnMilo/bitmap/raw/master/bitmap.go
 
-package core
+package dbio
 
 import "errors"
 

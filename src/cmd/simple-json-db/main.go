@@ -7,13 +7,13 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"core"
+	jsondb "simplejsondb"
 )
 
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	db, err := core.NewMetaDB("metadata-db.dat")
+	db, err := jsondb.New("metadata-db.dat")
 	if err != nil {
 		panic(err)
 	}

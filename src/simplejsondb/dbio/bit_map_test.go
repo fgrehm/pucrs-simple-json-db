@@ -3,20 +3,22 @@
 //
 // [1] - https://github.com/ShawnMilo/bitmap/raw/master/bitmap_test.go
 
-package core_test
+package dbio_test
 
 import (
 	"fmt"
 	"log"
 	"testing"
 
-	"core"
+	"simplejsondb/dbio"
+
+	utils "test_utils"
 )
 
 // get gets a value from a bitmap, handling
 // all the error checking so it's not repeated
 // a million times.
-func get(b core.BitMap, i int) bool {
+func get(b dbio.BitMap, i int) bool {
 	val, err := b.Get(i)
 	if err != nil {
 		log.Fatal("error getting from bitmap", err)
@@ -28,7 +30,7 @@ func get(b core.BitMap, i int) bool {
 // bitmap and its size is as set.
 func TestCreate(t *testing.T) {
 	for size := range []int{1, 13, 27, 66} {
-		b := core.NewBitMap(size)
+		b := dbio.NewBitMap(size)
 		if b.Size() != size {
 			t.Error("size doesn't match")
 		}
@@ -36,17 +38,17 @@ func TestCreate(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	b := core.NewBitMap(16)
+	b := dbio.NewBitMap(16)
 	b.Set(2)
 	b.Set(15)
 
-	if !slicesEqual(b.Bytes(), []byte{0x02, 0x40}) {
+	if !utils.SlicesEqual(b.Bytes(), []byte{0x02, 0x40}) {
 		t.Errorf("bytes do not match '%X'", b.Bytes())
 	}
 }
 
 func TestGet(t *testing.T) {
-	b := core.NewBitMap(50)
+	b := dbio.NewBitMap(50)
 	b.Set(2)
 	if !get(b, 2) {
 		t.Error("expected true, got false")
@@ -71,7 +73,7 @@ func TestGet(t *testing.T) {
 
 // Setting a value twice should not unset it.
 func TestSetTwice(t *testing.T) {
-	b := core.NewBitMap(10)
+	b := dbio.NewBitMap(10)
 	b.Set(2)
 	if !get(b, 2) {
 		t.Error("expected it to be set")
@@ -84,7 +86,7 @@ func TestSetTwice(t *testing.T) {
 
 // Unset a value.
 func TestSetUnset(t *testing.T) {
-	b := core.NewBitMap(10)
+	b := dbio.NewBitMap(10)
 	err := b.Set(2)
 	if err != nil {
 		t.Error(err)
@@ -106,7 +108,7 @@ func TestSetUnset(t *testing.T) {
 }
 
 func ExampleBitmap() {
-	b := core.NewBitMap(10)
+	b := dbio.NewBitMap(10)
 	b.Set(2)
 	fmt.Printf("2 in bitmap: %v. 7 in bitmap: %v.\n", get(b, 2), get(b, 7))
 	// Output: 2 in bitmap: true. 7 in bitmap: false.
@@ -115,13 +117,13 @@ func ExampleBitmap() {
 // TestSetOverflow tests dealing with out-of-range issues
 // in the Set method.
 func TestSetOverflow(t *testing.T) {
-	b := core.NewBitMap(42)
+	b := dbio.NewBitMap(42)
 	err := b.Set(52)
-	if err != core.ErrOutOfRange {
+	if err != dbio.ErrOutOfRange {
 		t.Error("out of range, there should be an error")
 	}
 	err = b.Set(-1)
-	if err != core.ErrOutOfRange {
+	if err != dbio.ErrOutOfRange {
 		t.Error("out of range, there should be an error")
 	}
 }
@@ -129,13 +131,13 @@ func TestSetOverflow(t *testing.T) {
 // TestGetOverflow tests dealing with out-of-range issues
 // in the Get method.
 func TestGetOverflow(t *testing.T) {
-	b := core.NewBitMap(42)
+	b := dbio.NewBitMap(42)
 	_, err := b.Get(52)
-	if err != core.ErrOutOfRange {
+	if err != dbio.ErrOutOfRange {
 		t.Error("out of range, there should be an error")
 	}
 	err = b.Set(-1)
-	if err != core.ErrOutOfRange {
+	if err != dbio.ErrOutOfRange {
 		t.Error("out of range, there should be an error")
 	}
 }

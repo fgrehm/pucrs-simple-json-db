@@ -1,8 +1,12 @@
-package core
+package simplejsondb
 
 import (
 	"errors"
 	log "github.com/Sirupsen/logrus"
+
+	"simplejsondb/actions"
+	"simplejsondb/core"
+	"simplejsondb/dbio"
 )
 
 const BUFFER_SIZE = 256
@@ -10,36 +14,25 @@ const BUFFER_SIZE = 256
 type MetaDB interface {
 	InsertRecord(data string) (uint32, error)
 	RemoveRecord(id uint32) error
-	FindRecord(id uint32) (*Record, error)
+	FindRecord(id uint32) (*core.Record, error)
 	Close() error
 }
 
-type Record struct {
-	ID   uint32
-	Data string
-}
-
-type RowID struct {
-	RecordID    uint32
-	DataBlockID uint16
-	LocalID     uint16
-}
-
 type metaDb struct {
-	dataFile DataFile
-	buffer   DataBuffer
+	dataFile dbio.DataFile
+	buffer   dbio.DataBuffer
 }
 
-func NewMetaDB(datafilePath string) (MetaDB, error) {
-	df, err := newDatafile(datafilePath)
+func New(datafilePath string) (MetaDB, error) {
+	df, err := dbio.NewDatafile(datafilePath)
 	if err != nil {
 		return nil, err
 	}
-	return NewMetaDBWithDataFile(df)
+	return NewWithDataFile(df)
 }
 
-func NewMetaDBWithDataFile(dataFile DataFile) (MetaDB, error) {
-	dataBuffer := NewDataBuffer(dataFile, BUFFER_SIZE)
+func NewWithDataFile(dataFile dbio.DataFile) (MetaDB, error) {
+	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
 	block, err := dataBuffer.FetchBlock(0)
 	if err != nil {
 		return nil, err
@@ -78,9 +71,9 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	block.Write(0, uint32(recordId+1))
 	m.buffer.MarkAsDirty(block.ID)
 
-	record := &Record{ID: recordId, Data: data}
-	allocator := newRecordAllocator(m.buffer)
-	if err = allocator.Run(record); err != nil {
+	record := &core.Record{ID: recordId, Data: data}
+	insert := actions.NewRecordAllocator(m.buffer)
+	if err = insert.Run(record); err != nil {
 		return 0, err
 	}
 	// TODO: After inserting the record, need to update the BTree+ index
@@ -99,32 +92,32 @@ func (m *metaDb) RemoveRecord(id uint32) error {
 		return err
 	}
 
-	rba := &recordBlockAdapter{block}
+	rba := core.NewRecordBlockAdapter(block)
 	return rba.Remove(rowID.LocalID)
 }
 
-func (m *metaDb) FindRecord(id uint32) (*Record, error) {
+func (m *metaDb) FindRecord(id uint32) (*core.Record, error) {
 	rowID, err := m.findRowID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return newRecordFinder(m.buffer).Find(rowID)
+	return core.NewRecordFinder(m.buffer).Find(rowID)
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
-func (m *metaDb) findRowID(needle uint32) (RowID, error) {
+func (m *metaDb) findRowID(needle uint32) (core.RowID, error) {
 	// FIXME: Needs to deal with records on a block != 1
 	block, err := m.buffer.FetchBlock(1)
 	if err != nil {
-		return RowID{}, err
+		return core.RowID{}, err
 	}
 
 	for {
-		rba := &recordBlockAdapter{block}
+		rba := core.NewRecordBlockAdapter(block)
 		for i, id := range rba.IDs() {
 			if id == needle {
-				return RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
+				return core.RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
 			}
 		}
 
@@ -132,10 +125,10 @@ func (m *metaDb) findRowID(needle uint32) (RowID, error) {
 		if nextBlockID != 0 {
 			block, err = m.buffer.FetchBlock(nextBlockID)
 			if err != nil {
-				return RowID{}, err
+				return core.RowID{}, err
 			}
 		} else {
-			return RowID{}, errors.New("Not found")
+			return core.RowID{}, errors.New("Not found")
 		}
 	}
 }

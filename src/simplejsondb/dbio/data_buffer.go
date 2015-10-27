@@ -1,4 +1,4 @@
-package core
+package dbio
 
 type DataBuffer interface {
 	FetchBlock(id uint16) (*DataBlock, error)

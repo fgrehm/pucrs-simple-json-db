@@ -1,22 +1,25 @@
-package core
+package actions
 
 import (
 	log "github.com/Sirupsen/logrus"
+
+	"simplejsondb/core"
+	"simplejsondb/dbio"
 )
 
 type RecordAllocator interface {
-	Run(record *Record) error
+	Run(record *core.Record) error
 }
 
 type recordAllocator struct {
-	buffer DataBuffer
+	buffer dbio.DataBuffer
 }
 
-func newRecordAllocator(buffer DataBuffer) RecordAllocator {
+func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
 	return &recordAllocator{buffer}
 }
 
-func (ra *recordAllocator) Run(record *Record) error {
+func (ra *recordAllocator) Run(record *core.Record) error {
 	block, err := ra.buffer.FetchBlock(0)
 	if err != nil {
 		return err
@@ -36,9 +39,9 @@ func (ra *recordAllocator) Run(record *Record) error {
 		if err != nil {
 			return err
 		}
-		adapter := newRecordBlockAdapter(block)
+		adapter := core.NewRecordBlockAdapter(block)
 
-		fitsOnDataBlock := (int(adapter.FreeSpace()) - len(record.Data) - int(RECORD_HEADER_SIZE)) > 0
+		fitsOnDataBlock := (int(adapter.FreeSpace()) - len(record.Data) - int(core.RECORD_HEADER_SIZE)) > 0
 		if fitsOnDataBlock {
 			_, _ = adapter.Add(record.ID, []byte(record.Data[0:len(record.Data)]))
 			// log.Println("New record RowID:", block.ID, localID)
@@ -60,7 +63,7 @@ func (ra *recordAllocator) Run(record *Record) error {
 		if err != nil {
 			return err
 		}
-		newRecordBlockAdapter(block).SetPrevBlockID(currBlockID)
+		core.NewRecordBlockAdapter(block).SetPrevBlockID(currBlockID)
 
 		ra.buffer.MarkAsDirty(currBlockID)
 	}

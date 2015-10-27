@@ -4,10 +4,10 @@ DOCKER_DEV_CONTAINER_NAME := pucrs-metadata-db-dev
 all: build test
 
 .PHONY: build
-build: bin/metadata-db
+build: bin/simple-json-db
 
-bin/metadata-db: src/**/*.go
-	gb build all
+bin/simple-json-db: $(shell find -L src -type f -name '*.go')
+	gb build cmd/simple-json-db
 
 .PHONY: test
 test:

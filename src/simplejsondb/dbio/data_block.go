@@ -1,4 +1,4 @@
-package core
+package dbio
 
 import (
 	"fmt"

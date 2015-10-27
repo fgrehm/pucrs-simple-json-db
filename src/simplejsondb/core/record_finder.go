@@ -1,14 +1,18 @@
 package core
 
+import (
+	"simplejsondb/dbio"
+)
+
 type RecordFinder interface {
 	Find(rowID RowID) (*Record, error)
 }
 
 type recordFinder struct {
-	buffer DataBuffer
+	buffer dbio.DataBuffer
 }
 
-func newRecordFinder(buffer DataBuffer) RecordFinder {
+func NewRecordFinder(buffer dbio.DataBuffer) RecordFinder {
 	return &recordFinder{buffer}
 }
 
@@ -17,7 +21,7 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	rba := newRecordBlockAdapter(block)
+	rba := NewRecordBlockAdapter(block)
 
 	// TODO: Deal with chained rows, BTree and the like
 	data := rba.ReadRecordData(rowID.LocalID)

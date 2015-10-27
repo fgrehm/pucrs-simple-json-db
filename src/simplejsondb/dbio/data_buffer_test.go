@@ -1,39 +1,41 @@
-package core_test
+package dbio_test
 
 import (
 	"errors"
 	"testing"
 
-	"core"
+	"simplejsondb/dbio"
+
+	utils "test_utils"
 )
 
 func TestFetchesBlockFromDataFile(t *testing.T) {
 	fakeDataBlock := []byte{0x10, 0xF0}
-	fakeDataFile := newFakeDataFile([][]byte{nil, fakeDataBlock})
+	fakeDataFile := utils.NewFakeDataFile([][]byte{nil, fakeDataBlock})
 
-	dataBlock, err := core.NewDataBuffer(fakeDataFile, 1).FetchBlock(1)
+	dataBlock, err := dbio.NewDataBuffer(fakeDataFile, 1).FetchBlock(1)
 	if err != nil {
 		t.Fatal("Unexpected error", err)
 	}
 	if dataBlock.ID != 1 {
 		t.Errorf("ID doesn't match (expected %d got %d)", 1, dataBlock.ID)
 	}
-	if !slicesEqual(dataBlock.Data[0:2], fakeDataBlock) {
+	if !utils.SlicesEqual(dataBlock.Data[0:2], fakeDataBlock) {
 		t.Errorf("Data blocks do not match (expected %x got %x)", fakeDataBlock, dataBlock.Data[0:2])
 	}
 }
 
 func TestFetchBlockCachesData(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{nil, []byte{}})
+	fakeDataFile := utils.NewFakeDataFile([][]byte{nil, []byte{}})
 
 	readCount := 0
-	original := fakeDataFile.readBlockFunc
-	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
+	original := fakeDataFile.ReadBlockFunc
+	fakeDataFile.ReadBlockFunc = func(id uint16, data []byte) error {
 		readCount += 1
 		return original(id, data)
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 1)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 1)
 	for i := 0; i < 10; i++ {
 		buffer.FetchBlock(1)
 	}
@@ -44,18 +46,18 @@ func TestFetchBlockCachesData(t *testing.T) {
 }
 
 func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFile([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
 	readCount := 0
-	original := fakeDataFile.readBlockFunc
-	fakeDataFile.readBlockFunc = func(id uint16, data []byte) error {
+	original := fakeDataFile.ReadBlockFunc
+	fakeDataFile.ReadBlockFunc = func(id uint16, data []byte) error {
 		readCount += 1
 		return original(id, data)
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 2)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 2)
 
 	// From this point on, we fetch blocks in a way to ensure that we have multiple
 	// hits on different blocks and also force a couple cache misses
@@ -81,19 +83,19 @@ func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
 
 func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	fakeDataBlock := []byte{0x00, 0x01, 0x02}
-	fakeDataFile := newFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFile([][]byte{
 		fakeDataBlock, []byte{}, []byte{},
 	})
 
 	blockThatWasWritten := uint16(999)
 	bytesWritten := []byte{}
-	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+	fakeDataFile.WriteBlockFunc = func(id uint16, data []byte) error {
 		blockThatWasWritten = id
 		bytesWritten = data
 		return nil
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 2)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 2)
 
 	// Read the first 2 blocks and flag the first one as dirty
 	buffer.FetchBlock(0)
@@ -109,23 +111,23 @@ func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	if blockThatWasWritten != 0 {
 		t.Errorf("Unknown block saved to disk (%d)", blockThatWasWritten)
 	}
-	if !slicesEqual(bytesWritten[0:3], fakeDataBlock) {
+	if !utils.SlicesEqual(bytesWritten[0:3], fakeDataBlock) {
 		t.Errorf("Invalid data saved to disk %x", bytesWritten[0:3])
 	}
 }
 
 func TestDiscardsUnmodifiedFrames(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFile([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
 	wroteToDisk := false
-	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+	fakeDataFile.WriteBlockFunc = func(id uint16, data []byte) error {
 		wroteToDisk = true
 		return nil
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 2)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 2)
 
 	// Read the first 2 blocks
 	buffer.FetchBlock(0)
@@ -140,17 +142,17 @@ func TestDiscardsUnmodifiedFrames(t *testing.T) {
 }
 
 func TestSavesDirtyFramesOnSync(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFile([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
 	blocksThatWereWritten := []uint16{}
-	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+	fakeDataFile.WriteBlockFunc = func(id uint16, data []byte) error {
 		blocksThatWereWritten = append(blocksThatWereWritten, id)
 		return nil
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 3)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 3)
 
 	// Read the 3 blocks and flag two as dirty
 	buffer.FetchBlock(0)
@@ -189,15 +191,15 @@ func TestSavesDirtyFramesOnSync(t *testing.T) {
 }
 
 func TestReturnsErrorsWhenSyncing(t *testing.T) {
-	fakeDataFile := newFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFile([][]byte{
 		[]byte{}, []byte{},
 	})
 	expectedError := errors.New("BOOM")
-	fakeDataFile.writeBlockFunc = func(id uint16, data []byte) error {
+	fakeDataFile.WriteBlockFunc = func(id uint16, data []byte) error {
 		return expectedError
 	}
 
-	buffer := core.NewDataBuffer(fakeDataFile, 2)
+	buffer := dbio.NewDataBuffer(fakeDataFile, 2)
 
 	buffer.FetchBlock(0)
 	buffer.FetchBlock(1)
