@@ -24,7 +24,9 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 	if err != nil {
 		return err
 	}
-	insertBlockID := block.ReadUint16(4)
+
+	cb := core.NewControlBlock(block)
+	insertBlockID := cb.NextAvailableRecordsDataBlockID()
 
 	// TODO: Check if the record fits the data block fetched. In case it doesn't fit,
 	//       "slice" the data into multiple blocks (aka chained rows). Use the amount

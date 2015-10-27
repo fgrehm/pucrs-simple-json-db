@@ -41,9 +41,9 @@ func NewWithDataFile(dataFile dbio.DataFile) (MetaDB, error) {
 		log.Println("Initializing datafile")
 
 		// Next ID = 1
-		block.Write(0, uint32(1))
+		block.Write(core.POS_NEXT_ID, uint32(1))
 		// Next Available Datablock = 3
-		block.Write(4, uint16(3))
+		block.Write(core.POS_NEXT_AVAILABLE_DATABLOCK, uint16(3))
 
 		dataBuffer.MarkAsDirty(block.ID)
 		if err = dataBuffer.Sync(); err != nil {
@@ -66,9 +66,9 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 		return 0, err
 	}
 
-	recordId := block.ReadUint32(0)
-	// Write back the next ID
-	block.Write(0, uint32(recordId+1))
+	cb := core.NewControlBlock(block)
+	recordId := cb.NextID()
+	cb.IncNextID()
 	m.buffer.MarkAsDirty(block.ID)
 
 	record := &core.Record{ID: recordId, Data: data}
