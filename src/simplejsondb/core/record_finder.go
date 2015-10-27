@@ -24,6 +24,10 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 	rba := NewRecordBlock(block)
 
 	// TODO: Deal with chained rows, BTree and the like
-	data := rba.ReadRecordData(rowID.LocalID)
+	data, err := rba.ReadRecordData(rowID.LocalID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Record{ID: rowID.RecordID, Data: data}, nil
 }

@@ -9,13 +9,14 @@ import (
 type RecordBlock interface {
 	FreeSpace() uint16
 	Utilization() uint16
-	// TODO: FreeSlots() []FreeSlot
 	Add(recordID uint32, data []byte) (uint16, uint16)
+	// ChainedRowID(localID uint16) RowID
 	Remove(localID uint16) error
 	NextBlockID() uint16
 	SetNextBlockID(blockID uint16)
+	PrevBlockID() uint16
 	SetPrevBlockID(blockID uint16)
-	ReadRecordData(localID uint16) string
+	ReadRecordData(localID uint16) (string, error)
 
 	// HACK: Temporary, meant to be around while we don't have a btree in place
 	IDs() []uint32
@@ -132,15 +133,29 @@ func (rba *recordBlock) SetNextBlockID(blockID uint16) {
 	rba.block.Write(POS_NEXT_BLOCK, blockID)
 }
 
+func (rba *recordBlock) PrevBlockID() uint16 {
+	return rba.block.ReadUint16(POS_PREV_BLOCK)
+}
+
 func (rba *recordBlock) SetPrevBlockID(blockID uint16) {
 	rba.block.Write(POS_PREV_BLOCK, blockID)
 }
 
-func (rba *recordBlock) ReadRecordData(localID uint16) string {
+func (rba *recordBlock) ReadRecordData(localID uint16) (string, error) {
+	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
+	if localID >= totalRecords {
+		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
+	}
+
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
+	id := rba.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
+	if id == 0 {
+		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
+	}
+
 	start := rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
 	end := start + rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
-	return string(rba.block.Data[start:end])
+	return string(rba.block.Data[start:end]), nil
 }
 
 func (rba *recordBlock) FreeSpace() uint16 {
