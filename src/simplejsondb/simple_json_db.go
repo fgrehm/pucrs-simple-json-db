@@ -42,8 +42,8 @@ func NewWithDataFile(dataFile dbio.DataFile) (MetaDB, error) {
 
 		// Next ID = 1
 		block.Write(0, uint32(1))
-		// Next Available Datablock = 1
-		block.Write(4, uint16(1))
+		// Next Available Datablock = 3
+		block.Write(4, uint16(3))
 
 		dataBuffer.MarkAsDirty(block.ID)
 		if err = dataBuffer.Sync(); err != nil {
@@ -107,8 +107,7 @@ func (m *metaDb) FindRecord(id uint32) (*core.Record, error) {
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
 func (m *metaDb) findRowID(needle uint32) (core.RowID, error) {
-	// FIXME: Needs to deal with records on a block != 1
-	block, err := m.buffer.FetchBlock(1)
+	block, err := m.buffer.FetchBlock(3)
 	if err != nil {
 		return core.RowID{}, err
 	}

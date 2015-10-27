@@ -12,7 +12,7 @@ import (
 
 func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 	blocks := [][]byte{}
-	for i := 0; i < 26; i++ {
+	for i := 0; i < 28; i++ {
 		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
 	}
 
@@ -31,7 +31,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 
 		record, err := db.FindRecord(id)
 		if err != nil {
-			t.Fatalf("Unexpected error returned '%s'", err)
+			t.Fatalf("Unexpected error returned while reading %d (%s)", id, err)
 		}
 		if record.Data != data {
 			t.Errorf("Unexpected data returned (%s)", record.Data)
