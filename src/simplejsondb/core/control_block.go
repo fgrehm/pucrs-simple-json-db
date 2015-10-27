@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	POS_NEXT_ID = 0
+	POS_NEXT_ID                  = 0
 	POS_NEXT_AVAILABLE_DATABLOCK = 4
 )
 
@@ -29,7 +29,7 @@ func (cb *controlBlock) NextID() uint32 {
 }
 
 func (cb *controlBlock) IncNextID() {
-	cb.block.Write(POS_NEXT_ID, cb.NextID() + 1)
+	cb.block.Write(POS_NEXT_ID, cb.NextID()+1)
 }
 
 func (cb *controlBlock) NextAvailableRecordsDataBlockID() uint16 {

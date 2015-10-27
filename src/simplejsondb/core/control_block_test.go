@@ -1,17 +1,17 @@
 package core_test
 
 import (
-	"simplejsondb/dbio"
 	"simplejsondb/core"
+	"simplejsondb/dbio"
 
 	"fmt"
 
-	"testing"
 	utils "test_utils"
+	"testing"
 )
 
 func TestControlBlock_NextID(t *testing.T) {
-	block := &dbio.DataBlock{Data: []byte{ 0x00, 0x00, 0x00, 0x10}}
+	block := &dbio.DataBlock{Data: []byte{0x00, 0x00, 0x00, 0x10}}
 	cb := core.NewControlBlock(block)
 
 	if id := cb.NextID(); id != 16 {
