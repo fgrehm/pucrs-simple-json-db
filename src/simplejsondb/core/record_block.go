@@ -6,9 +6,10 @@ import (
 	"simplejsondb/dbio"
 )
 
-type RecordBlockAdapter interface {
+type RecordBlock interface {
 	FreeSpace() uint16
 	Utilization() uint16
+	// TODO: FreeSlots() []FreeSlot
 	Add(recordID uint32, data []byte) (uint16, uint16)
 	Remove(localID uint16) error
 	NextBlockID() uint16
@@ -37,7 +38,7 @@ const (
 	POS_FIRST_HEADER  = POS_PREV_BLOCK - RECORD_HEADER_SIZE - 1
 )
 
-type recordBlockAdapter struct {
+type recordBlock struct {
 	block *dbio.DataBlock
 }
 
@@ -48,11 +49,11 @@ type recordHeader struct {
 	size     uint16
 }
 
-func NewRecordBlockAdapter(block *dbio.DataBlock) RecordBlockAdapter {
-	return &recordBlockAdapter{block}
+func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
+	return &recordBlock{block}
 }
 
-func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16) {
+func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 	utilization := rba.Utilization()
 	recordSize := uint16(len(data))
 
@@ -97,11 +98,11 @@ func (rba *recordBlockAdapter) Add(recordID uint32, data []byte) (uint16, uint16
 	return bytesWritten, localID
 }
 
-func (rba *recordBlockAdapter) Remove(localID uint16) error {
+func (rba *recordBlock) Remove(localID uint16) error {
 	// Records present on the block
 	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
 	if localID >= totalRecords {
-		return errors.New("Invalid local ID provided to `RecordBlockAdapter.Remove`")
+		return errors.New("Invalid local ID provided to `RecordBlock.Remove`")
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
@@ -115,7 +116,7 @@ func (rba *recordBlockAdapter) Remove(localID uint16) error {
 	return nil
 }
 
-func (rba *recordBlockAdapter) Utilization() uint16 {
+func (rba *recordBlock) Utilization() uint16 {
 	utilization := rba.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
 		utilization = MIN_UTILIZATION
@@ -123,31 +124,31 @@ func (rba *recordBlockAdapter) Utilization() uint16 {
 	return utilization
 }
 
-func (rba *recordBlockAdapter) NextBlockID() uint16 {
+func (rba *recordBlock) NextBlockID() uint16 {
 	return rba.block.ReadUint16(POS_NEXT_BLOCK)
 }
 
-func (rba *recordBlockAdapter) SetNextBlockID(blockID uint16) {
+func (rba *recordBlock) SetNextBlockID(blockID uint16) {
 	rba.block.Write(POS_NEXT_BLOCK, blockID)
 }
 
-func (rba *recordBlockAdapter) SetPrevBlockID(blockID uint16) {
+func (rba *recordBlock) SetPrevBlockID(blockID uint16) {
 	rba.block.Write(POS_PREV_BLOCK, blockID)
 }
 
-func (rba *recordBlockAdapter) ReadRecordData(localID uint16) string {
+func (rba *recordBlock) ReadRecordData(localID uint16) string {
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
 	start := rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
 	end := start + rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
 	return string(rba.block.Data[start:end])
 }
 
-func (rba *recordBlockAdapter) FreeSpace() uint16 {
+func (rba *recordBlock) FreeSpace() uint16 {
 	return dbio.DATABLOCK_SIZE - rba.Utilization()
 }
 
 // HACK: Temporary, meant to be around while we don't have a btree in place
-func (rba *recordBlockAdapter) IDs() []uint32 {
+func (rba *recordBlock) IDs() []uint32 {
 	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
 	ids := []uint32{}
 

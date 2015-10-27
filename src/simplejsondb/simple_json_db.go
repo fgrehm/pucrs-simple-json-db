@@ -87,12 +87,13 @@ func (m *metaDb) RemoveRecord(id uint32) error {
 		return err
 	}
 
+	// TODO: Extract to a separate object and deal with chained rows
 	block, err := m.buffer.FetchBlock(rowID.DataBlockID)
 	if err != nil {
 		return err
 	}
 
-	rba := core.NewRecordBlockAdapter(block)
+	rba := core.NewRecordBlock(block)
 	return rba.Remove(rowID.LocalID)
 }
 
@@ -113,7 +114,7 @@ func (m *metaDb) findRowID(needle uint32) (core.RowID, error) {
 	}
 
 	for {
-		rba := core.NewRecordBlockAdapter(block)
+		rba := core.NewRecordBlock(block)
 		for i, id := range rba.IDs() {
 			if id == needle {
 				return core.RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil

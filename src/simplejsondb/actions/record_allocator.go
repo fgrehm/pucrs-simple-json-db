@@ -41,7 +41,7 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 		if err != nil {
 			return err
 		}
-		adapter := core.NewRecordBlockAdapter(block)
+		adapter := core.NewRecordBlock(block)
 
 		fitsOnDataBlock := (int(adapter.FreeSpace()) - len(record.Data) - int(core.RECORD_HEADER_SIZE)) > 0
 		if fitsOnDataBlock {
@@ -65,7 +65,7 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 		if err != nil {
 			return err
 		}
-		core.NewRecordBlockAdapter(block).SetPrevBlockID(currBlockID)
+		core.NewRecordBlock(block).SetPrevBlockID(currBlockID)
 
 		ra.buffer.MarkAsDirty(currBlockID)
 	}
