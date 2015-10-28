@@ -62,18 +62,38 @@ func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 	totalRecords := rba.block.ReadUint16(POS_TOTAL_RECORDS)
 
 	// Calculate where the record starts
-	var recordPtr int
-	if totalRecords == 0 {
-		recordPtr = 0
-	} else {
-		// Starts where the last record ends
+	recordPtr := 0
+	localID := uint16(0)
+	newHeaderPtr := int(POS_FIRST_HEADER)
+	reusedHeader := false
+
+	// Used as the rowid
+
+	if totalRecords > 0 {
+		found := false
+		for i := uint16(0); i < totalRecords; i++ {
+			newHeaderPtr = int(POS_FIRST_HEADER) - int(i) * int(RECORD_HEADER_SIZE)
+			id := rba.block.ReadUint32(newHeaderPtr+HEADER_OFFSET_RECORD_ID)
+			if id == 0 {
+				localID = uint16(i)
+				found = true
+				reusedHeader = true
+				break
+			}
+		}
+
+		// If no free header spot can be found, start where the last record ends
+		if ! found {
+			newHeaderPtr = int(POS_FIRST_HEADER - totalRecords*RECORD_HEADER_SIZE)
+		}
+
+		// FIXME: This is wrong
 		lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalRecords-1)*RECORD_HEADER_SIZE)
-		// FIXME: This will fail once we have deletion implemented
 		recordPtr = int(rba.block.ReadUint16(lastHeaderPtr+4) + rba.block.ReadUint16(lastHeaderPtr+6))
 	}
 
 	// Header
-	newHeaderPtr := int(POS_FIRST_HEADER - totalRecords*RECORD_HEADER_SIZE)
+	// newHeaderPtr := int(POS_FIRST_HEADER - totalRecords*RECORD_HEADER_SIZE)
 
 	// Le ID
 	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, recordID)
@@ -89,12 +109,13 @@ func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 	// Le data
 	rba.block.Write(recordPtr, data)
 	totalRecords += 1
-	utilization += RECORD_HEADER_SIZE + recordSize
+	utilization += recordSize
+	if !reusedHeader {
+		utilization += RECORD_HEADER_SIZE
+	}
 	rba.block.Write(POS_UTILIZATION, utilization)
 	rba.block.Write(POS_TOTAL_RECORDS, totalRecords)
 
-	// Used as the rowid
-	localID := totalRecords - 1
 	bytesWritten := recordSize
 	return bytesWritten, localID
 }
