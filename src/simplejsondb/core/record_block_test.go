@@ -13,7 +13,7 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 
 	prevUtilization := rb.Utilization()
 
-	_, localID := rb.Add(uint32(10), []byte("01234567890123456789"))
+	localID := rb.Add(uint32(10), []byte("01234567890123456789"))
 
 	// "Force reload" the wrapper
 	rb = core.NewRecordBlock(block)
@@ -53,14 +53,14 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	rb := core.NewRecordBlock(block)
 
 	rb.Add(uint32(10), []byte("0123456789"))
-	_, localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
+	localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
 	rb.Add(uint32(12), []byte("9999999999"))
 
 	if err := rb.Remove(localID); err != nil {
 		t.Fatal(err)
 	}
 	prevUtilization := rb.Utilization()
-	_, newLocalID := rb.Add(uint32(13), []byte("00"))
+	newLocalID := rb.Add(uint32(13), []byte("00"))
 	if localID != newLocalID {
 		t.Error("Did not reuse the deleted record localid")
 	}
@@ -108,13 +108,6 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	if string(block.Data[0:32]) != "0123456789999999999900NNNNNNNNNN" {
 		t.Errorf("Invalid final state `%s`, expected `%s`", string(block.Data[0:32]), "0123456789999999999900NNNNNNNNNN")
 	}
-}
-
-func TestRecordBlock_ReturnsTheAmountOfBytesWritten(t *testing.T) {
-	t.Fatal("TODO")
-
-	// Force a chained row
-	// test that a record that fits return all bytes
 }
 
 func TestRecordBlock_NextBlockID(t *testing.T) {

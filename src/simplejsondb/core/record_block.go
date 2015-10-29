@@ -12,7 +12,8 @@ import (
 type RecordBlock interface {
 	FreeSpace() uint16
 	Utilization() uint16
-	Add(recordID uint32, data []byte) (uint16, uint16)
+	Add(recordID uint32, data []byte) uint16
+	// SetChainedRowID(localID uint16, RowID)
 	// ChainedRowID(localID uint16) RowID
 	Remove(localID uint16) error
 	NextBlockID() uint16
@@ -59,7 +60,7 @@ func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
 	return &recordBlock{block}
 }
 
-func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
+func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	headers := rb.parseHeaders()
 
 	var newHeader *recordBlockHeader
@@ -119,8 +120,7 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 	rb.block.Write(POS_UTILIZATION, utilization)
 	rb.block.Write(POS_TOTAL_HEADERS, uint16(len(headers)))
 
-	bytesWritten := newHeader.size
-	return bytesWritten, newHeader.localID
+	return newHeader.localID
 }
 
 func (rb *recordBlock) Remove(localID uint16) error {

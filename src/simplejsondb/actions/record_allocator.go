@@ -30,8 +30,8 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 
 	// TODO: Check if the record fits the data block fetched. In case it doesn't fit,
 	//       "slice" the data into multiple blocks (aka chained rows). Use the amount
-	//       of bytes written returned by `adapter.Add` to decide
-	//       Don't forget to `adapter.SetNextRowID(localID, nextBlockID, nextLocalID)`
+	//       of bytes written returned by `recordBlock.Add` to decide
+	//       Don't forget to `recordBlock.SetNextRowID(localID, nextBlockID, nextLocalID)`
 	//       and `ra.buffer.MarkAsDirty(nextBlockID)`
 	//       Also need to take into consideration the linked list of data blocks and
 	//       update pointers when allocating a new datablock
@@ -41,16 +41,24 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 		if err != nil {
 			return err
 		}
-		adapter := core.NewRecordBlock(block)
+		recordBlock := core.NewRecordBlock(block)
+		recordLength := len(record.Data)
+		// TODO: Move to the record block object
+		freeSpaceForInsert := int(recordBlock.FreeSpace()) - int(core.RECORD_HEADER_SIZE)
 
-		fitsOnDataBlock := (int(adapter.FreeSpace()) - len(record.Data) - int(core.RECORD_HEADER_SIZE)) > 0
-		if fitsOnDataBlock {
-			_, _ = adapter.Add(record.ID, []byte(record.Data[0:len(record.Data)]))
+		// Does the record fit on the datablock?
+		if (freeSpaceForInsert - recordLength) >= 0 {
+			recordBlock.Add(record.ID, []byte(record.Data[0:recordLength]))
 			// log.Println("New record RowID:", block.ID, localID)
 			break
 		}
 
-		if nextID := adapter.NextBlockID(); nextID != 0 {
+		// Can we "slice" the record and make it a chained row?
+		// if freeSpaceForInsert > 0
+		//   Find a free contiguous block for insert / update
+
+		// Does not fit on this datablock, move on to the next one
+		if nextID := recordBlock.NextBlockID(); nextID != 0 {
 			insertBlockID = nextID
 			continue
 		}
@@ -58,9 +66,11 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 		// FIXME: Deal with Datafile with no space left
 
 		currBlockID := insertBlockID
+		// TODO: Lookup the next available datablock on bitmap instead of just
+		//       incrementing it
 		insertBlockID++
 		log.Printf("Allocating a new datablock (%d)", insertBlockID)
-		adapter.SetNextBlockID(insertBlockID)
+		recordBlock.SetNextBlockID(insertBlockID)
 		block, err = ra.buffer.FetchBlock(insertBlockID)
 		if err != nil {
 			return err
