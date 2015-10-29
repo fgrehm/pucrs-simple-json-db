@@ -1,5 +1,9 @@
 package dbio
 
+import (
+	log "github.com/Sirupsen/logrus"
+)
+
 type DataBuffer interface {
 	FetchBlock(id uint16) (*DataBlock, error)
 	MarkAsDirty(id uint16) error
@@ -44,8 +48,12 @@ func NewDataBuffer(df DataFile, size int) DataBuffer {
 func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 	frame, present := db.idToFrame[id]
 	if present {
+		log.Debugf("FETCH blockid=%d, cachehit=true", id)
+
 		return &DataBlock{ID: id, Data: frame.data}, nil
 	} else {
+		log.Debugf("FETCH blockid=%d, cachehit=false", id)
+
 		if len(db.nextVictims) == db.size {
 			if err := db.evictOldestFrame(); err != nil {
 				return nil, err
@@ -97,6 +105,7 @@ func (db *dataBuffer) evictOldestFrame() error {
 	id := db.nextVictims[0]
 	frame := db.idToFrame[id]
 
+	log.Infof("EVICT blockid=%d, dirty=%t", id, frame.isDirty)
 	if frame.isDirty {
 		if err := db.df.WriteBlock(id, frame.data); err != nil {
 			return err
