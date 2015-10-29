@@ -43,7 +43,7 @@ type recordBlock struct {
 	block *dbio.DataBlock
 }
 
-type recordHeader struct {
+type recordBlockHeader struct {
 	localID  uint16
 	recordID uint32
 	startsAt uint16
@@ -55,69 +55,77 @@ func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
 }
 
 func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
-	utilization := rb.Utilization()
-	recordSize := uint16(len(data))
-
-	// Headers present on the block
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 
-	// Calculate where the record starts
-	recordPtr := 0
-	localID := uint16(0)
-	newHeaderPtr := int(POS_FIRST_HEADER)
-	reusedHeader := false
+	utilization := rb.Utilization()
 
-	// Used as the rowid
+	headers := rb.parseHeaders()
+	var newHeader *recordBlockHeader
 
-	if totalHeaders > 0 {
-		found := false
-		for i := uint16(0); i < totalHeaders; i++ {
-			newHeaderPtr = int(POS_FIRST_HEADER) - int(i) * int(RECORD_HEADER_SIZE)
-			id := rb.block.ReadUint32(newHeaderPtr+HEADER_OFFSET_RECORD_ID)
-			if id == 0 {
-				localID = uint16(i)
-				found = true
-				reusedHeader = true
-				break
+	// Is there a header we can reuse?
+	for _, h := range headers {
+		if h.recordID == 0 {
+			newHeader = &h
+			break
+		}
+	}
+	if newHeader == nil {
+		if totalHeaders == 0 {
+			newHeader = &recordBlockHeader{
+				localID:  0,
+				recordID: recordID,
+				// FIXME: This is wrong
+				startsAt: 0,
+				// FIXME: This is wrong
+				size:     uint16(len(data)),
+			}
+		} else {
+			// FIXME: This is wrong
+			lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalHeaders-1)*RECORD_HEADER_SIZE)
+			newHeader = &recordBlockHeader{
+				localID:  totalHeaders,
+				recordID: recordID,
+				// FIXME: This is wrong
+				startsAt: rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_START) + rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_SIZE),
+				// FIXME: This is wrong
+				size:     uint16(len(data)),
 			}
 		}
-
-		// If no free header spot can be found, start where the last record ends
-		if ! found {
-			newHeaderPtr = int(POS_FIRST_HEADER - totalHeaders*RECORD_HEADER_SIZE)
-		}
-
+		totalHeaders += 1
+		utilization += RECORD_HEADER_SIZE
+	} else {
 		// FIXME: This is wrong
 		lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalHeaders-1)*RECORD_HEADER_SIZE)
-		recordPtr = int(rb.block.ReadUint16(lastHeaderPtr+4) + rb.block.ReadUint16(lastHeaderPtr+6))
+
+		newHeader.recordID = recordID
+
+		// FIXME: This is wrong
+		newHeader.startsAt = rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_START) + rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_SIZE)
+		// FIXME: This is wrong
+		newHeader.size = uint16(len(data))
 	}
 
-	// Header
-	// newHeaderPtr := int(POS_FIRST_HEADER - totalHeaders*RECORD_HEADER_SIZE)
+	newHeaderPtr := int(POS_FIRST_HEADER) - int(newHeader.localID*RECORD_HEADER_SIZE)
 
 	// Le ID
-	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, recordID)
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, newHeader.recordID)
 
 	// Where the record starts
-	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_START, uint16(recordPtr))
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_START, newHeader.startsAt)
 
 	// Record size
-	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, recordSize)
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, newHeader.size)
 
 	// TODO: 4 bytes for chained rows
 
 	// Le data
-	rb.block.Write(recordPtr, data)
-	totalHeaders += 1
-	utilization += recordSize
-	if !reusedHeader {
-		utilization += RECORD_HEADER_SIZE
-	}
+	rb.block.Write(int(newHeader.startsAt), data)
+	utilization += newHeader.size
 	rb.block.Write(POS_UTILIZATION, utilization)
 	rb.block.Write(POS_TOTAL_HEADERS, totalHeaders)
 
-	bytesWritten := recordSize
-	return bytesWritten, localID
+	bytesWritten := newHeader.size
+	return bytesWritten, newHeader.localID
 }
 
 func (rb *recordBlock) Remove(localID uint16) error {
@@ -183,7 +191,7 @@ func (rb *recordBlock) FreeSpace() uint16 {
 	return dbio.DATABLOCK_SIZE - rb.Utilization()
 }
 
-func (rb *recordBlock) headers() []recordBlockHeader {
+func (rb *recordBlock) parseHeaders() []recordBlockHeader {
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	ret := []recordBlockHeader{}
 
