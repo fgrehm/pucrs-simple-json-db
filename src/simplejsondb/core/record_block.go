@@ -54,12 +54,12 @@ func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
 	return &recordBlock{block}
 }
 
-func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
-	utilization := rba.Utilization()
+func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
+	utilization := rb.Utilization()
 	recordSize := uint16(len(data))
 
 	// Headers present on the block
-	totalHeaders := rba.block.ReadUint16(POS_TOTAL_HEADERS)
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 
 	// Calculate where the record starts
 	recordPtr := 0
@@ -73,7 +73,7 @@ func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 		found := false
 		for i := uint16(0); i < totalHeaders; i++ {
 			newHeaderPtr = int(POS_FIRST_HEADER) - int(i) * int(RECORD_HEADER_SIZE)
-			id := rba.block.ReadUint32(newHeaderPtr+HEADER_OFFSET_RECORD_ID)
+			id := rb.block.ReadUint32(newHeaderPtr+HEADER_OFFSET_RECORD_ID)
 			if id == 0 {
 				localID = uint16(i)
 				found = true
@@ -89,111 +89,111 @@ func (rba *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 
 		// FIXME: This is wrong
 		lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalHeaders-1)*RECORD_HEADER_SIZE)
-		recordPtr = int(rba.block.ReadUint16(lastHeaderPtr+4) + rba.block.ReadUint16(lastHeaderPtr+6))
+		recordPtr = int(rb.block.ReadUint16(lastHeaderPtr+4) + rb.block.ReadUint16(lastHeaderPtr+6))
 	}
 
 	// Header
 	// newHeaderPtr := int(POS_FIRST_HEADER - totalHeaders*RECORD_HEADER_SIZE)
 
 	// Le ID
-	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, recordID)
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_ID, recordID)
 
 	// Where the record starts
-	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_START, uint16(recordPtr))
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_START, uint16(recordPtr))
 
 	// Record size
-	rba.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, recordSize)
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, recordSize)
 
 	// TODO: 4 bytes for chained rows
 
 	// Le data
-	rba.block.Write(recordPtr, data)
+	rb.block.Write(recordPtr, data)
 	totalHeaders += 1
 	utilization += recordSize
 	if !reusedHeader {
 		utilization += RECORD_HEADER_SIZE
 	}
-	rba.block.Write(POS_UTILIZATION, utilization)
-	rba.block.Write(POS_TOTAL_HEADERS, totalHeaders)
+	rb.block.Write(POS_UTILIZATION, utilization)
+	rb.block.Write(POS_TOTAL_HEADERS, totalHeaders)
 
 	bytesWritten := recordSize
 	return bytesWritten, localID
 }
 
-func (rba *recordBlock) Remove(localID uint16) error {
+func (rb *recordBlock) Remove(localID uint16) error {
 	// Records present on the block
-	totalHeaders := rba.block.ReadUint16(POS_TOTAL_HEADERS)
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
 		return errors.New("Invalid local ID provided to `RecordBlock.Remove`")
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
-	rba.block.Write(headerPtr+HEADER_OFFSET_RECORD_ID, uint32(0))
+	rb.block.Write(headerPtr+HEADER_OFFSET_RECORD_ID, uint32(0))
 
 	// Utilization goes down just by the amount of data taken by the record, the
 	// header is kept around so we do not "free" up the space taken by it
-	utilization := rba.Utilization() - rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
-	rba.block.Write(POS_UTILIZATION, utilization)
+	utilization := rb.Utilization() - rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
+	rb.block.Write(POS_UTILIZATION, utilization)
 
 	return nil
 }
 
-func (rba *recordBlock) Utilization() uint16 {
-	utilization := rba.block.ReadUint16(POS_UTILIZATION)
+func (rb *recordBlock) Utilization() uint16 {
+	utilization := rb.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
 		utilization = MIN_UTILIZATION
 	}
 	return utilization
 }
 
-func (rba *recordBlock) NextBlockID() uint16 {
-	return rba.block.ReadUint16(POS_NEXT_BLOCK)
+func (rb *recordBlock) NextBlockID() uint16 {
+	return rb.block.ReadUint16(POS_NEXT_BLOCK)
 }
 
-func (rba *recordBlock) SetNextBlockID(blockID uint16) {
-	rba.block.Write(POS_NEXT_BLOCK, blockID)
+func (rb *recordBlock) SetNextBlockID(blockID uint16) {
+	rb.block.Write(POS_NEXT_BLOCK, blockID)
 }
 
-func (rba *recordBlock) PrevBlockID() uint16 {
-	return rba.block.ReadUint16(POS_PREV_BLOCK)
+func (rb *recordBlock) PrevBlockID() uint16 {
+	return rb.block.ReadUint16(POS_PREV_BLOCK)
 }
 
-func (rba *recordBlock) SetPrevBlockID(blockID uint16) {
-	rba.block.Write(POS_PREV_BLOCK, blockID)
+func (rb *recordBlock) SetPrevBlockID(blockID uint16) {
+	rb.block.Write(POS_PREV_BLOCK, blockID)
 }
 
-func (rba *recordBlock) ReadRecordData(localID uint16) (string, error) {
-	totalHeaders := rba.block.ReadUint16(POS_TOTAL_HEADERS)
+func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
 		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
-	id := rba.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
+	id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 	if id == 0 {
 		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
 	}
 
-	start := rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
-	end := start + rba.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
-	return string(rba.block.Data[start:end]), nil
+	start := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
+	end := start + rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
+	return string(rb.block.Data[start:end]), nil
 }
 
-func (rba *recordBlock) FreeSpace() uint16 {
-	return dbio.DATABLOCK_SIZE - rba.Utilization()
+func (rb *recordBlock) FreeSpace() uint16 {
+	return dbio.DATABLOCK_SIZE - rb.Utilization()
 }
 
-func (rba *recordBlock) headers() []recordBlockHeader {
-	totalHeaders := rba.block.ReadUint16(POS_TOTAL_HEADERS)
+func (rb *recordBlock) headers() []recordBlockHeader {
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	ret := []recordBlockHeader{}
 
 	for localID := uint16(0); localID < totalHeaders; localID++ {
 		headerPtr := int(POS_FIRST_HEADER - localID*RECORD_HEADER_SIZE)
 		header := recordBlockHeader{
 			localID:  localID,
-			recordID: rba.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
-			startsAt: rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START),
-			size:     rba.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE),
+			recordID: rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
+			startsAt: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START),
+			size:     rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE),
 		}
 		ret = append(ret, header)
 	}
@@ -202,13 +202,13 @@ func (rba *recordBlock) headers() []recordBlockHeader {
 }
 
 // HACK: Temporary, meant to be around while we don't have a btree in place
-func (rba *recordBlock) IDs() []uint32 {
-	totalHeaders := rba.block.ReadUint16(POS_TOTAL_HEADERS)
+func (rb *recordBlock) IDs() []uint32 {
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	ids := []uint32{}
 
 	for i := uint16(0); i < totalHeaders; i++ {
 		headerPtr := int(POS_FIRST_HEADER - i*RECORD_HEADER_SIZE)
-		id := rba.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
+		id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 		ids = append(ids, id)
 	}
 
