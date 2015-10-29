@@ -13,8 +13,8 @@ type RecordBlock interface {
 	FreeSpace() uint16
 	Utilization() uint16
 	Add(recordID uint32, data []byte) uint16
-	// SetChainedRowID(localID uint16, RowID)
-	// ChainedRowID(localID uint16) RowID
+	SetChainedRowID(localID uint16, rowID RowID) error
+	ChainedRowID(localID uint16) (RowID, error)
 	Remove(localID uint16) error
 	NextBlockID() uint16
 	SetNextBlockID(blockID uint16)
@@ -27,10 +27,12 @@ type RecordBlock interface {
 }
 
 const (
-	HEADER_OFFSET_RECORD_ID    = 0
-	HEADER_OFFSET_RECORD_START = 4
-	HEADER_OFFSET_RECORD_SIZE  = HEADER_OFFSET_RECORD_START + 2
-	RECORD_HEADER_SIZE         = uint16(12)
+	HEADER_OFFSET_RECORD_ID            = 0
+	HEADER_OFFSET_RECORD_START         = 4
+	HEADER_OFFSET_RECORD_SIZE          = HEADER_OFFSET_RECORD_START + 2
+	HEADER_OFFSET_CHAINED_ROW_BLOCK_ID = HEADER_OFFSET_RECORD_SIZE + 2
+	HEADER_OFFSET_CHAINED_ROW_LOCAL_ID = HEADER_OFFSET_CHAINED_ROW_BLOCK_ID + 2
+	RECORD_HEADER_SIZE                 = uint16(12)
 
 	// A datablock will have at least 8 bytes to store its utilization, total
 	// records count and prev / next datablock pointers
@@ -90,11 +92,11 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	}
 	newHeader.startsAt = utilization - MIN_UTILIZATION - (uint16(len(headers)) * RECORD_HEADER_SIZE)
 	log.Infof("WRITE rowid='%d:%d', recordid=%d, startsAt=%d, size=%d",
-						rb.block.ID,
-						newHeader.localID,
-						newHeader.recordID,
-						newHeader.startsAt,
-						newHeader.size)
+		rb.block.ID,
+		newHeader.localID,
+		newHeader.recordID,
+		newHeader.startsAt,
+		newHeader.size)
 
 	newHeaderPtr := int(POS_FIRST_HEADER) - int(newHeader.localID*RECORD_HEADER_SIZE)
 
@@ -107,7 +109,9 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	// Record size
 	rb.block.Write(newHeaderPtr+HEADER_OFFSET_RECORD_SIZE, newHeader.size)
 
-	// TODO: 4 bytes for chained rows
+	// Always zero out chained row IDs, in case we are reusing a deleted record header
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_CHAINED_ROW_BLOCK_ID, uint16(0))
+	rb.block.Write(newHeaderPtr+HEADER_OFFSET_CHAINED_ROW_LOCAL_ID, uint16(0))
 
 	// Le data
 	rb.block.Write(int(newHeader.startsAt), data)
@@ -132,11 +136,11 @@ func (rb *recordBlock) Remove(localID uint16) error {
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
 	log.Infof("DELETE rowid='%d:%d', recordid=%d, startsAt=%d, size=%d",
-						rb.block.ID,
-						localID,
-						rb.block.ReadUint32(headerPtr+HEADER_OFFSET_RECORD_ID),
-						rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_START),
-						rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE))
+		rb.block.ID,
+		localID,
+		rb.block.ReadUint32(headerPtr+HEADER_OFFSET_RECORD_ID),
+		rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_START),
+		rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE))
 
 	rb.block.Write(headerPtr+HEADER_OFFSET_RECORD_ID, uint32(0))
 
@@ -174,6 +178,42 @@ func (rb *recordBlock) SetPrevBlockID(blockID uint16) {
 	rb.block.Write(POS_PREV_BLOCK, blockID)
 }
 
+func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
+	if localID >= totalHeaders {
+		return RowID{}, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ChainedRowID` (%d)", localID))
+	}
+
+	headerPtr := int(POS_FIRST_HEADER) - int(localID)*int(RECORD_HEADER_SIZE)
+	id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
+	if id == 0 {
+		return RowID{}, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ChainedRowID` (%d)", localID))
+	}
+
+	return RowID{
+		DataBlockID: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_BLOCK_ID),
+		LocalID:     rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_LOCAL_ID),
+	}, nil
+}
+
+func (rb *recordBlock) SetChainedRowID(localID uint16, rowID RowID) error {
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
+	if localID >= totalHeaders {
+		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.SetChainedRowID` (%d)", localID))
+	}
+
+	headerPtr := int(POS_FIRST_HEADER) - int(localID)*int(RECORD_HEADER_SIZE)
+	id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
+	if id == 0 {
+		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.SetChainedRowID` (%d)", localID))
+	}
+
+	rb.block.Write(headerPtr+HEADER_OFFSET_CHAINED_ROW_BLOCK_ID, rowID.DataBlockID)
+	rb.block.Write(headerPtr+HEADER_OFFSET_CHAINED_ROW_LOCAL_ID, rowID.LocalID)
+
+	return nil
+}
+
 func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
@@ -187,7 +227,7 @@ func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
 	}
 
 	start := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
-	recordSize := rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
+	recordSize := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE)
 	end := start + recordSize
 
 	log.Infof("READ rowid='%d:%d', recordid=%d, startsAt=%d, size=%d", rb.block.ID, localID, id, start, recordSize)

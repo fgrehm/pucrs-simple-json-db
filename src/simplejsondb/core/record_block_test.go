@@ -110,6 +110,45 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	}
 }
 
+func TestRecordBlock_ChainedRows(t *testing.T) {
+	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
+	rb := core.NewRecordBlock(block)
+
+	// Ensure we don't set chained rows for unkown records
+	if err := rb.SetChainedRowID(1, core.RowID{}); err == nil {
+		t.Fatal(err)
+	}
+
+	localID := rb.Add(uint32(14), []byte("NNNNNNNNNN"))
+	chainedID := core.RowID{DataBlockID: 1, LocalID: 2}
+	if err := rb.SetChainedRowID(localID, chainedID); err != nil {
+		t.Fatal(err)
+	}
+
+	// "Force reload" the wrapper
+	rb = core.NewRecordBlock(block)
+	rowID, err := rb.ChainedRowID(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rowID != chainedID {
+		t.Fatal("Invalid chained row ID found")
+	}
+
+	// Ensure the chained row id gets restored after removing and inserting a new record
+	rb.Remove(localID)
+	if newID := rb.Add(uint32(15), []byte("A")); newID != localID {
+		t.Fatalf("Did not reuse the localID, got %d, expected %d", newID, localID)
+	}
+	rowID, err = rb.ChainedRowID(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rowID != (core.RowID{}) {
+		t.Fatal("Invalid chained row ID found")
+	}
+}
+
 func TestRecordBlock_NextBlockID(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
 	rb := core.NewRecordBlock(block)
