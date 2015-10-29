@@ -20,7 +20,7 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 
 	// Did the utilization increase?
 	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE+20 {
-		t.Errorf("Allocated an unexpected amount of data")
+		t.Errorf("Allocated an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE+20, rb.Utilization())
 	}
 
 	// Can we read the record again?
@@ -44,12 +44,11 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 	}
 
 	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE {
-		t.Error("Freed an unexpected amount of data")
-		println(rb.Utilization()-prevUtilization)
+		t.Errorf("Freed an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE, rb.Utilization())
 	}
 }
 
-func TestRecordBlock_MakesUseOfEmptySlots(t *testing.T) {
+func TestRecordBlock_Allocation(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
 	rb := core.NewRecordBlock(block)
 
@@ -60,6 +59,7 @@ func TestRecordBlock_MakesUseOfEmptySlots(t *testing.T) {
 	if err := rb.Remove(localID); err != nil {
 		t.Fatal(err)
 	}
+	prevUtilization := rb.Utilization()
 	_, newLocalID := rb.Add(uint32(13), []byte("00"))
 	if localID != newLocalID {
 		t.Error("Did not reuse the deleted record localid")
@@ -76,10 +76,37 @@ func TestRecordBlock_MakesUseOfEmptySlots(t *testing.T) {
 	if data != "00" {
 		t.Errorf("Unexpected data found `%s`", data)
 	}
+	// Ensure things are persisted as they should
+	if string(block.Data[0:22]) != "0123456789999999999900" {
+		t.Errorf("Did not defrag the block. Block contents `%s`, expected `%s`", string(block.Data[0:92]), "0123456789999999999900")
+	}
+
+	// Ensure this will change
+	prevUtilization = rb.Utilization()
+
+	// Add yet another set of bytes
+	rb.Add(uint32(14), []byte("NNNNNNNNNN"))
+
+	// "Force reload" the wrapper
+	rb = core.NewRecordBlock(block)
+
+	// Did we update the utilization accordingly?
+	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE+10 {
+		t.Errorf("Allocated an unexpected amount of data (allocated %d bytes, expected %d, total %d)", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE+10, rb.Utilization())
+	}
+
+	// Can we still read the record that filled in the gap?
+	data, err = rb.ReadRecordData(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data != "00" {
+		t.Errorf("Unexpected data found `%s`, expected `%s`", data, "00")
+	}
 
 	// Last but not least, ensure things are persisted as they should
-	if string(block.Data[0:32]) != "012345678900AAAAAAAA9999999999" {
-		t.Errorf("Did not reuse the free spot. Block contents `%s`", string(block.Data[0:32]))
+	if string(block.Data[0:32]) != "0123456789999999999900NNNNNNNNNN" {
+		t.Errorf("Invalid final state `%s`, expected `%s`", string(block.Data[0:32]), "0123456789999999999900NNNNNNNNNN")
 	}
 }
 

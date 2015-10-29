@@ -2,6 +2,9 @@ package core
 
 import (
 	"errors"
+	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"sort"
 
 	"simplejsondb/dbio"
 )
@@ -50,60 +53,51 @@ type recordBlockHeader struct {
 	size     uint16
 }
 
+type recordBlockHeaders []*recordBlockHeader
+
 func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
 	return &recordBlock{block}
 }
 
 func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
-	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
+	headers := rb.parseHeaders()
+
+	var newHeader *recordBlockHeader
+	log.Printf("[%d]    add start headers: %s", recordID, headers)
 
 	utilization := rb.Utilization()
-
-	headers := rb.parseHeaders()
-	var newHeader *recordBlockHeader
+	log.Printf("utilization", utilization)
 
 	// Is there a header we can reuse?
+	sort.Sort(headers)
+	log.Printf("add sorted headers: %s", headers)
 	for _, h := range headers {
 		if h.recordID == 0 {
-			newHeader = &h
+			newHeader = h
 			break
 		}
 	}
+
 	if newHeader == nil {
-		if totalHeaders == 0 {
-			newHeader = &recordBlockHeader{
-				localID:  0,
-				recordID: recordID,
-				// FIXME: This is wrong
-				startsAt: 0,
-				// FIXME: This is wrong
-				size:     uint16(len(data)),
-			}
-		} else {
-			// FIXME: This is wrong
-			lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalHeaders-1)*RECORD_HEADER_SIZE)
-			newHeader = &recordBlockHeader{
-				localID:  totalHeaders,
-				recordID: recordID,
-				// FIXME: This is wrong
-				startsAt: rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_START) + rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_SIZE),
-				// FIXME: This is wrong
-				size:     uint16(len(data)),
-			}
+		newHeader = &recordBlockHeader{
+			localID:  uint16(len(headers)),
+			recordID: recordID,
+			size:     uint16(len(data)),
 		}
-		totalHeaders += 1
+		log.Println("New record header: ", newHeader)
+		headers = append(headers, newHeader)
 		utilization += RECORD_HEADER_SIZE
 	} else {
-		// FIXME: This is wrong
-		lastHeaderPtr := int(POS_FIRST_HEADER) - int((totalHeaders-1)*RECORD_HEADER_SIZE)
-
-		newHeader.recordID = recordID
-
-		// FIXME: This is wrong
-		newHeader.startsAt = rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_START) + rb.block.ReadUint16(lastHeaderPtr+HEADER_OFFSET_RECORD_SIZE)
-		// FIXME: This is wrong
+		rb.defragment(headers)
+		sort.Sort(headers)
 		newHeader.size = uint16(len(data))
+		newHeader.recordID = recordID
 	}
+	newHeader.startsAt = utilization - MIN_UTILIZATION - (uint16(len(headers)) * RECORD_HEADER_SIZE)
+	log.Printf("add end headers: %s", headers)
+
+	// fmt.Printf("%+v\n", headers)
+	// fmt.Printf("will insert on %+v\n", newHeader)
 
 	newHeaderPtr := int(POS_FIRST_HEADER) - int(newHeader.localID*RECORD_HEADER_SIZE)
 
@@ -121,18 +115,23 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) (uint16, uint16) {
 	// Le data
 	rb.block.Write(int(newHeader.startsAt), data)
 	utilization += newHeader.size
+	log.Printf("end utilization", utilization)
 	rb.block.Write(POS_UTILIZATION, utilization)
-	rb.block.Write(POS_TOTAL_HEADERS, totalHeaders)
+	rb.block.Write(POS_TOTAL_HEADERS, uint16(len(headers)))
 
 	bytesWritten := newHeader.size
 	return bytesWritten, newHeader.localID
 }
 
 func (rb *recordBlock) Remove(localID uint16) error {
+	log.Printf("begin remove headers: %s", rb.parseHeaders())
+
+	log.Printf("begin utilization", rb.Utilization())
+
 	// Records present on the block
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
-		return errors.New("Invalid local ID provided to `RecordBlock.Remove`")
+		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.Remove`, got %d", localID))
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
@@ -142,6 +141,9 @@ func (rb *recordBlock) Remove(localID uint16) error {
 	// header is kept around so we do not "free" up the space taken by it
 	utilization := rb.Utilization() - rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
 	rb.block.Write(POS_UTILIZATION, utilization)
+
+	log.Printf("end remove headers: %s", rb.parseHeaders())
+	log.Printf("end utilization", utilization)
 
 	return nil
 }
@@ -173,13 +175,13 @@ func (rb *recordBlock) SetPrevBlockID(blockID uint16) {
 func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
-		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
+		return "", errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
 	}
 
-	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
+	headerPtr := int(POS_FIRST_HEADER) - int(localID)*int(RECORD_HEADER_SIZE)
 	id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 	if id == 0 {
-		return "", errors.New("Invalid local ID provided to `RecordBlock.ReadRecordData`")
+		return "", errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
 	}
 
 	start := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
@@ -191,13 +193,63 @@ func (rb *recordBlock) FreeSpace() uint16 {
 	return dbio.DATABLOCK_SIZE - rb.Utilization()
 }
 
-func (rb *recordBlock) parseHeaders() []recordBlockHeader {
+func (rb *recordBlock) defragment(headers recordBlockHeaders) {
+	log.Infof("Defragmenting block %d", rb.block.ID)
+	sort.Sort(headers)
+	log.Infof("Defragmenting block sorted %s", headers)
+
+	for i, h := range headers {
+		// Search for a blanky header
+		if h.recordID != 0 {
+			continue
+		}
+
+		// If the header has been zeroed out already, move on
+		if h.size == 0 {
+			continue
+		}
+
+		// Shift all of the following headers data
+		log.Debugf("Compressing byte range: %d-%d", h.startsAt, h.startsAt+h.size)
+		dataPtr := h.startsAt
+		for _, n := range headers[i+1:] {
+			// Copy bytes over from the following record
+			for p := uint16(0); p < n.size; p++ {
+				rb.block.Data[dataPtr+p] = rb.block.Data[n.startsAt+p]
+			}
+			n.startsAt = dataPtr
+			rb.block.Write(int(POS_FIRST_HEADER)-int(n.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_START, n.startsAt)
+			dataPtr += n.size
+		}
+
+		// After compressing, we flag the header as zeroed out
+		h.size = 0
+		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_SIZE, h.size)
+		h.startsAt = dataPtr
+		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_START, h.startsAt)
+	}
+	log.Infof("Done defrag %s", headers)
+}
+
+func (rbh recordBlockHeaders) Len() int {
+	return len(rbh)
+}
+
+func (rbh recordBlockHeaders) Less(i, j int) bool {
+	return rbh[i].startsAt < rbh[j].startsAt
+}
+
+func (rbh recordBlockHeaders) Swap(i, j int) {
+	rbh[i], rbh[j] = rbh[j], rbh[i]
+}
+
+func (rb *recordBlock) parseHeaders() recordBlockHeaders {
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
-	ret := []recordBlockHeader{}
+	ret := recordBlockHeaders{}
 
 	for localID := uint16(0); localID < totalHeaders; localID++ {
 		headerPtr := int(POS_FIRST_HEADER - localID*RECORD_HEADER_SIZE)
-		header := recordBlockHeader{
+		header := &recordBlockHeader{
 			localID:  localID,
 			recordID: rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
 			startsAt: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START),
