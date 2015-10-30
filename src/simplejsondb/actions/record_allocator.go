@@ -20,15 +20,15 @@ func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
 }
 
 func (ra *recordAllocator) Run(record *core.Record) error {
-	log.Printf("INSERT recordid=%d\n", record.ID)
+	log.Printf("INSERT recordid=%d", record.ID)
 
-	block, err := ra.buffer.FetchBlock(0)
+	controlDataBlock, err := ra.buffer.FetchBlock(0)
 	if err != nil {
 		return err
 	}
 
-	cb := core.NewControlBlock(block)
-	insertBlockID := cb.NextAvailableRecordsDataBlockID()
+	controlBlock := core.NewControlBlock(controlDataBlock)
+	insertBlockID := controlBlock.NextAvailableRecordsDataBlockID()
 
 	// TODO: Check if the record fits the data block fetched. In case it doesn't fit,
 	//       "slice" the data into multiple blocks (aka chained rows). Use the amount
@@ -65,13 +65,11 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 			continue
 		}
 
-
 		currBlockID := insertBlockID
-
-		log.Printf("Allocating a new datablock (%d)", insertBlockID)
 		blocksMap := core.NewDataBlocksMap(ra.buffer)
-		insertBlockID := blocksMap.FirstFree()
+		insertBlockID = blocksMap.FirstFree()
 		blocksMap.MarkAsUsed(insertBlockID)
+		log.Printf("ALLOCATE blockid=%d, prevblockid=%d", insertBlockID, currBlockID)
 
 		// FIXME: Deal with Datafile with no space left
 
@@ -81,8 +79,10 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 			return err
 		}
 		core.NewRecordBlock(block).SetPrevBlockID(currBlockID)
-
 		ra.buffer.MarkAsDirty(currBlockID)
+
+		controlBlock.SetNextAvailableRecordsDataBlockID(insertBlockID)
+		ra.buffer.MarkAsDirty(controlDataBlock.ID)
 	}
 
 	ra.buffer.MarkAsDirty(insertBlockID)
