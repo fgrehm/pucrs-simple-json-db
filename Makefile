@@ -1,5 +1,5 @@
-DOCKER_IMAGE := fgrehm/pucrs-metadata-db
-DOCKER_DEV_CONTAINER_NAME := pucrs-metadata-db-dev
+DOCKER_IMAGE := fgrehm/simple-json-db
+DOCKER_DEV_CONTAINER_NAME := simple-json-db-dev
 
 all: build test
 
@@ -12,7 +12,7 @@ bin/simple-json-db: $(shell find -L src -type f -name '*.go')
 .PHONY: test
 test:
 	@echo 'Running tests...'
-	gb test ./...
+	gb test simplejsondb/...
 
 .PHONY: test.watch
 test.watch:
