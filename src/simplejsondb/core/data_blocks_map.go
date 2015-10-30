@@ -91,7 +91,7 @@ func (dbm *dataBlocksMap) AllInUse() bool {
 	return true
 }
 
-func (dbm *dataBlocksMap) updateBitMap(dataBlockID uint16, updateFunc func (dbio.BitMap, int)) {
+func (dbm *dataBlocksMap) updateBitMap(dataBlockID uint16, updateFunc func(dbio.BitMap, int)) {
 	updateFunc(dbm.tupleForBlockID(dataBlockID))
 	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
 	dbm.dataBuffer.MarkAsDirty(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)

@@ -33,14 +33,25 @@ func New(datafilePath string) (SimpleJSONDB, error) {
 
 func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
-	block, err := dataBuffer.FetchBlock(0)
+	blockZero, err := dataBuffer.FetchBlock(0)
 	if err != nil {
 		return nil, err
 	}
 	jsonDB := &simpleJSONDB{dataFile, dataBuffer}
 
-	if block.ReadUint32(0) == 0 {
-		if err := jsonDB.format(block); err != nil {
+	controlBlock := core.NewControlBlock(blockZero)
+	if controlBlock.NextID() == 0 {
+		log.Println("FORMAT_DB")
+
+		controlBlock.Format()
+		dataBuffer.MarkAsDirty(blockZero.ID)
+
+		blockMap := core.NewDataBlocksMap(dataBuffer)
+		for i := uint16(0); i < 4; i++ {
+			blockMap.MarkAsUsed(i)
+		}
+
+		if err := dataBuffer.Sync(); err != nil {
 			return nil, err
 		}
 	}
@@ -98,28 +109,6 @@ func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 	}
 
 	return core.NewRecordFinder(db.buffer).Find(rowID)
-}
-
-func (db *simpleJSONDB) format(blockZero *dbio.DataBlock) error {
-	log.Println("Initializing datafile")
-
-	// Next ID = 1
-	blockZero.Write(core.POS_NEXT_ID, uint32(1))
-	// Next Available Datablock = 3
-	blockZero.Write(core.POS_NEXT_AVAILABLE_DATABLOCK, uint16(3))
-	db.buffer.MarkAsDirty(blockZero.ID)
-
-	blockMap := core.NewDataBlocksMap(db.buffer)
-
-	for i := uint16(0); i < 4; i++ {
-		blockMap.MarkAsUsed(i)
-	}
-
-	if err := db.buffer.Sync(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place

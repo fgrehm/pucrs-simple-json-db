@@ -9,7 +9,7 @@ import (
 	utils "test_utils"
 )
 
-func TestInitializesDataFile(t *testing.T) {
+func TestSimpleJSONDB_InitializesDataFile(t *testing.T) {
 	firstDataBlock := make([]byte, 10)
 	blocksBitMapBlock := make([]byte, dbio.DATABLOCK_SIZE)
 	fakeDataFile := utils.NewFakeDataFile([][]byte{firstDataBlock, blocksBitMapBlock})

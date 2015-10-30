@@ -10,6 +10,7 @@ const (
 )
 
 type ControlBlock interface {
+	Format()
 	NextID() uint32
 	IncNextID()
 	NextAvailableRecordsDataBlockID() uint16
@@ -22,6 +23,13 @@ type controlBlock struct {
 
 func NewControlBlock(block *dbio.DataBlock) ControlBlock {
 	return &controlBlock{block}
+}
+
+func (cb *controlBlock) Format() {
+	// Next ID = 1
+	cb.block.Write(POS_NEXT_ID, uint32(1))
+	// Next Available Datablock = 3
+	cb.block.Write(POS_NEXT_AVAILABLE_DATABLOCK, uint16(3))
 }
 
 func (cb *controlBlock) NextID() uint32 {
