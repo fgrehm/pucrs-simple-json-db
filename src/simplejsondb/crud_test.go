@@ -12,7 +12,7 @@ import (
 
 func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 	blocks := [][]byte{}
-	for i := 0; i < 28; i++ {
+	for i := 0; i < 31; i++ {
 		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
 	}
 

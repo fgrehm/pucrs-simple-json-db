@@ -20,6 +20,8 @@ func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
 }
 
 func (ra *recordAllocator) Run(record *core.Record) error {
+	log.Printf("INSERT recordid=%d\n", record.ID)
+
 	block, err := ra.buffer.FetchBlock(0)
 	if err != nil {
 		return err
@@ -63,13 +65,16 @@ func (ra *recordAllocator) Run(record *core.Record) error {
 			continue
 		}
 
-		// FIXME: Deal with Datafile with no space left
 
 		currBlockID := insertBlockID
-		// TODO: Lookup the next available datablock on bitmap instead of just
-		//       incrementing it
-		insertBlockID++
+
 		log.Printf("Allocating a new datablock (%d)", insertBlockID)
+		blocksMap := core.NewDataBlocksMap(ra.buffer)
+		insertBlockID := blocksMap.FirstFree()
+		blocksMap.MarkAsUsed(insertBlockID)
+
+		// FIXME: Deal with Datafile with no space left
+
 		recordBlock.SetNextBlockID(insertBlockID)
 		block, err = ra.buffer.FetchBlock(insertBlockID)
 		if err != nil {
