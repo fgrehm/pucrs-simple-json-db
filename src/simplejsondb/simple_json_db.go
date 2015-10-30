@@ -47,15 +47,15 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 	return jsonDB, nil
 }
 
-func (m *simpleJSONDB) Close() error {
-	if err := m.buffer.Sync(); err != nil {
+func (db *simpleJSONDB) Close() error {
+	if err := db.buffer.Sync(); err != nil {
 		return err
 	}
-	return m.dataFile.Close()
+	return db.dataFile.Close()
 }
 
-func (m *simpleJSONDB) InsertRecord(data string) (uint32, error) {
-	block, err := m.buffer.FetchBlock(0)
+func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
+	block, err := db.buffer.FetchBlock(0)
 	if err != nil {
 		return 0, err
 	}
@@ -63,10 +63,10 @@ func (m *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	cb := core.NewControlBlock(block)
 	recordId := cb.NextID()
 	cb.IncNextID()
-	m.buffer.MarkAsDirty(block.ID)
+	db.buffer.MarkAsDirty(block.ID)
 
 	record := &core.Record{ID: recordId, Data: data}
-	insert := actions.NewRecordAllocator(m.buffer)
+	insert := actions.NewRecordAllocator(db.buffer)
 	if err = insert.Run(record); err != nil {
 		return 0, err
 	}
@@ -75,14 +75,14 @@ func (m *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	return recordId, nil
 }
 
-func (m *simpleJSONDB) RemoveRecord(id uint32) error {
-	rowID, err := m.findRowID(id)
+func (db *simpleJSONDB) RemoveRecord(id uint32) error {
+	rowID, err := db.findRowID(id)
 	if err != nil {
 		return err
 	}
 
 	// TODO: Extract to a separate object and deal with chained rows
-	block, err := m.buffer.FetchBlock(rowID.DataBlockID)
+	block, err := db.buffer.FetchBlock(rowID.DataBlockID)
 	if err != nil {
 		return err
 	}
@@ -91,13 +91,13 @@ func (m *simpleJSONDB) RemoveRecord(id uint32) error {
 	return rba.Remove(rowID.LocalID)
 }
 
-func (m *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
-	rowID, err := m.findRowID(id)
+func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
+	rowID, err := db.findRowID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return core.NewRecordFinder(m.buffer).Find(rowID)
+	return core.NewRecordFinder(db.buffer).Find(rowID)
 }
 
 func (db *simpleJSONDB) format(blockZero *dbio.DataBlock) error {
@@ -123,8 +123,8 @@ func (db *simpleJSONDB) format(blockZero *dbio.DataBlock) error {
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
-func (m *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
-	block, err := m.buffer.FetchBlock(3)
+func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
+	block, err := db.buffer.FetchBlock(3)
 	if err != nil {
 		return core.RowID{}, err
 	}
@@ -139,7 +139,7 @@ func (m *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
 
 		nextBlockID := rba.NextBlockID()
 		if nextBlockID != 0 {
-			block, err = m.buffer.FetchBlock(nextBlockID)
+			block, err = db.buffer.FetchBlock(nextBlockID)
 			if err != nil {
 				return core.RowID{}, err
 			}

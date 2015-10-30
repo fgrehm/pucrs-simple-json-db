@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	jsondb "simplejsondb"
+	"simplejsondb/dbio"
 
 	utils "test_utils"
 )
 
 func TestInitializesDataFile(t *testing.T) {
 	firstDataBlock := make([]byte, 10)
-	fakeDataFile := utils.NewFakeDataFile([][]byte{firstDataBlock})
+	blocksBitMapBlock := make([]byte, dbio.DATABLOCK_SIZE)
+	fakeDataFile := utils.NewFakeDataFile([][]byte{firstDataBlock, blocksBitMapBlock})
 
 	jsondb.NewWithDataFile(fakeDataFile)
 
