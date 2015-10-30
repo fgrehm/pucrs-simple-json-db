@@ -59,6 +59,10 @@ func TestDataBlocksMap(t *testing.T) {
 	if !dbm.AllInUse() {
 		t.Error("Expected all positions to be in use")
 	}
+	dbm.MarkAsFree(2)
+	if dbm.AllInUse() {
+		t.Error("Expected all positions to not be in use")
+	}
 
 	// Ensure that the blocks / frames were flagged as dirty
 	blocksThatWereWritten := []uint16{}

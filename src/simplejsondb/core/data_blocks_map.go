@@ -34,11 +34,11 @@ func (dbm *dataBlocksMap) FirstFree() uint16 {
 
 		bitMap := dbio.NewBitMapFromBytes(block.Data)
 		for i := 0; i < dbio.DATABLOCK_SIZE; i++ {
-			set, err := bitMap.Get(i)
+			isInUse, err := bitMap.Get(i)
 			if err != nil {
 				panic(err)
 			}
-			if !set {
+			if !isInUse {
 				return uint16(i) + blockIndex*dbio.DATABLOCK_SIZE
 			}
 		}
@@ -47,54 +47,29 @@ func (dbm *dataBlocksMap) FirstFree() uint16 {
 }
 
 func (dbm *dataBlocksMap) MarkAsFree(dataBlockID uint16) {
-	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
-	flagOffset := dataBlockID % dbio.DATABLOCK_SIZE
-
-	block, err := dbm.dataBuffer.FetchBlock(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)
-	if err != nil {
-		panic(err)
-	}
-	bm := dbio.NewBitMapFromBytes(block.Data)
-
-	if err = bm.Unset(int(flagOffset)); err != nil {
-		panic(err)
-	}
-
-	dbm.dataBuffer.MarkAsDirty(block.ID)
+	dbm.updateBitMap(dataBlockID, func(bitMap dbio.BitMap, flagOffset int) {
+		if err := bitMap.Unset(flagOffset); err != nil {
+			panic(err)
+		}
+	})
 }
 
 func (dbm *dataBlocksMap) MarkAsUsed(dataBlockID uint16) {
-	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
-	flagOffset := dataBlockID % dbio.DATABLOCK_SIZE
-
-	block, err := dbm.dataBuffer.FetchBlock(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)
-	if err != nil {
-		panic(err)
-	}
-	bm := dbio.NewBitMapFromBytes(block.Data)
-
-	if err = bm.Set(int(flagOffset)); err != nil {
-		panic(err)
-	}
-
-	dbm.dataBuffer.MarkAsDirty(block.ID)
+	dbm.updateBitMap(dataBlockID, func(bitMap dbio.BitMap, flagOffset int) {
+		if err := bitMap.Set(flagOffset); err != nil {
+			panic(err)
+		}
+	})
 }
 
 func (dbm *dataBlocksMap) IsInUse(dataBlockID uint16) bool {
-	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
-	flagOffset := dataBlockID % dbio.DATABLOCK_SIZE
+	bitMap, flagOffset := dbm.tupleForBlockID(dataBlockID)
 
-	block, err := dbm.dataBuffer.FetchBlock(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)
+	isInUse, err := bitMap.Get(int(flagOffset))
 	if err != nil {
 		panic(err)
 	}
-	bm := dbio.NewBitMapFromBytes(block.Data)
-
-	set, err := bm.Get(int(flagOffset))
-	if err != nil {
-		panic(err)
-	}
-	return set
+	return isInUse
 }
 
 func (dbm *dataBlocksMap) AllInUse() bool {
@@ -106,14 +81,30 @@ func (dbm *dataBlocksMap) AllInUse() bool {
 
 		bitMap := dbio.NewBitMapFromBytes(block.Data)
 		for i := 0; i < dbio.DATABLOCK_SIZE; i++ {
-			set, err := bitMap.Get(i)
-			if err != nil {
+			if isInUse, err := bitMap.Get(i); err != nil {
 				panic(err)
-			}
-			if !set {
+			} else if !isInUse {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+func (dbm *dataBlocksMap) updateBitMap(dataBlockID uint16, updateFunc func (dbio.BitMap, int)) {
+	updateFunc(dbm.tupleForBlockID(dataBlockID))
+	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
+	dbm.dataBuffer.MarkAsDirty(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)
+}
+
+func (dbm *dataBlocksMap) tupleForBlockID(dataBlockID uint16) (dbio.BitMap, int) {
+	blockOffset := dataBlockID / dbio.DATABLOCK_SIZE
+	flagOffset := dataBlockID % dbio.DATABLOCK_SIZE
+
+	block, err := dbm.dataBuffer.FetchBlock(DATA_BLOCK_MAP_FIRST_BLOCK + blockOffset)
+	if err != nil {
+		panic(err)
+	}
+
+	return dbio.NewBitMapFromBytes(block.Data), int(flagOffset)
 }

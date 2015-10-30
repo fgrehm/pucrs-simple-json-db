@@ -11,19 +11,19 @@ import (
 
 const BUFFER_SIZE = 256
 
-type MetaDB interface {
+type SimpleJSONDB interface {
 	InsertRecord(data string) (uint32, error)
 	RemoveRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
 	Close() error
 }
 
-type metaDb struct {
+type simpleJSONDB struct {
 	dataFile dbio.DataFile
 	buffer   dbio.DataBuffer
 }
 
-func New(datafilePath string) (MetaDB, error) {
+func New(datafilePath string) (SimpleJSONDB, error) {
 	df, err := dbio.NewDatafile(datafilePath)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func New(datafilePath string) (MetaDB, error) {
 	return NewWithDataFile(df)
 }
 
-func NewWithDataFile(dataFile dbio.DataFile) (MetaDB, error) {
+func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
 	block, err := dataBuffer.FetchBlock(0)
 	if err != nil {
@@ -50,17 +50,17 @@ func NewWithDataFile(dataFile dbio.DataFile) (MetaDB, error) {
 			return nil, err
 		}
 	}
-	return &metaDb{dataFile, dataBuffer}, nil
+	return &simpleJSONDB{dataFile, dataBuffer}, nil
 }
 
-func (m *metaDb) Close() error {
+func (m *simpleJSONDB) Close() error {
 	if err := m.buffer.Sync(); err != nil {
 		return err
 	}
 	return m.dataFile.Close()
 }
 
-func (m *metaDb) InsertRecord(data string) (uint32, error) {
+func (m *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	block, err := m.buffer.FetchBlock(0)
 	if err != nil {
 		return 0, err
@@ -81,7 +81,7 @@ func (m *metaDb) InsertRecord(data string) (uint32, error) {
 	return recordId, nil
 }
 
-func (m *metaDb) RemoveRecord(id uint32) error {
+func (m *simpleJSONDB) RemoveRecord(id uint32) error {
 	rowID, err := m.findRowID(id)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (m *metaDb) RemoveRecord(id uint32) error {
 	return rba.Remove(rowID.LocalID)
 }
 
-func (m *metaDb) FindRecord(id uint32) (*core.Record, error) {
+func (m *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 	rowID, err := m.findRowID(id)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (m *metaDb) FindRecord(id uint32) (*core.Record, error) {
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
-func (m *metaDb) findRowID(needle uint32) (core.RowID, error) {
+func (m *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
 	block, err := m.buffer.FetchBlock(3)
 	if err != nil {
 		return core.RowID{}, err

@@ -1,9 +1,9 @@
 package dbio_test
 
 import (
-  log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 )
 
 func init() {
-  log.SetLevel(log.WarnLevel)
+	log.SetLevel(log.WarnLevel)
 }
