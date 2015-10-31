@@ -30,7 +30,7 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 
 	controlBlock := core.NewControlBlock(controlDataBlock)
 	insertBlockID := controlBlock.NextAvailableRecordsDataBlockID()
-	var rowID core.RowID
+	var localID uint16
 
 	for {
 		block, err := ra.buffer.FetchBlock(insertBlockID)
@@ -38,19 +38,17 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 			return core.RowID{}, err
 		}
 		recordBlock := core.NewRecordBlock(block)
-		recordLength := len(record.Data)
 		freeSpaceForInsert := recordBlock.FreeSpaceForInsert()
 
-		// Does the record fit on the datablock?
-		if (int(freeSpaceForInsert) - recordLength) >= 0 {
-			localID := recordBlock.Add(record.ID, []byte(record.Data[0:recordLength]))
-			rowID = core.RowID{DataBlockID: block.ID, LocalID: localID}
+		// XXX: This is not ideal since it may result in having a single byte on a
+		//      datablock for a chained row
+		if freeSpaceForInsert > 0 {
+			localID, err = ra.allocateRecord(int(freeSpaceForInsert), block, record)
+			if err != nil {
+				return core.RowID{}, err
+			}
 			break
 		}
-
-		// Can we "slice" the record and make it a chained row?
-		// if freeSpaceForInsert > 0
-		//   Find a free contiguous block for insert / update
 
 		// Does not fit on this datablock, move on to the next one
 		if nextID := recordBlock.NextBlockID(); nextID != 0 {
@@ -72,7 +70,77 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	}
 
 	ra.buffer.MarkAsDirty(insertBlockID)
-	return rowID, nil
+	return core.RowID{DataBlockID: insertBlockID, LocalID: localID}, nil
+}
+
+func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *dbio.DataBlock, record *core.Record) (uint16, error) {
+	dataToWrite := []byte(record.Data)
+	bytesToWrite := len(dataToWrite)
+	recordBlock := core.NewRecordBlock(initialBlock)
+
+	// Does the record fit on the datablock?
+	if len(dataToWrite) > freeSpaceForInsert {
+		bytesToWrite = freeSpaceForInsert
+	}
+
+	// Write as many bytes as we can
+	recordLocalID := recordBlock.Add(record.ID, dataToWrite[0:bytesToWrite])
+	dataToWrite = dataToWrite[bytesToWrite:]
+
+	currBlockID := initialBlock.ID
+	currRecordBlock := recordBlock
+	currLocalID := recordLocalID
+	nextBlockID := recordBlock.NextBlockID()
+	var err error
+
+	for bytesToWrite = len(dataToWrite); bytesToWrite > 0; bytesToWrite = len(dataToWrite) {
+		log.Debugf("Remaining data `% x`", dataToWrite)
+
+		// Do we need a new block to add to the end of the list?
+		if nextBlockID == 0 {
+			nextBlockID, err = ra.allocateNewBlock(currBlockID)
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		// Can we write something to the next data block?
+		nextDataBlockCandidate, err := ra.buffer.FetchBlock(nextBlockID)
+		if err != nil {
+			return 0, err
+		}
+		nextBlockCandidate := core.NewRecordBlock(nextDataBlockCandidate)
+		freeSpaceForInsertOnNewBlock := int(nextBlockCandidate.FreeSpaceForInsert())
+
+		// The block is full, move on on the linked list
+		if freeSpaceForInsertOnNewBlock == 0 {
+			currBlockID = nextBlockID
+			nextBlockID = nextBlockCandidate.NextBlockID()
+			continue
+		}
+
+		// At this point we can write something on the block, but does it fit on a single block?
+		if bytesToWrite > freeSpaceForInsertOnNewBlock {
+			bytesToWrite = freeSpaceForInsertOnNewBlock
+		}
+
+		log.Debugf("Bytes to write %d", bytesToWrite)
+
+		// Write data and set up the chained row stuff
+		chainedLocalID := nextBlockCandidate.Add(record.ID, dataToWrite[0:bytesToWrite])
+		chainedRowID := core.RowID{DataBlockID: nextBlockID, LocalID: chainedLocalID}
+		currRecordBlock.SetChainedRowID(currLocalID, chainedRowID)
+		ra.buffer.MarkAsDirty(currBlockID)
+		ra.buffer.MarkAsDirty(nextBlockID)
+
+		// Continue writing on next blocks
+		currLocalID = chainedLocalID
+		currBlockID = nextBlockID
+		nextBlockID = nextBlockCandidate.NextBlockID()
+		dataToWrite = dataToWrite[bytesToWrite:]
+	}
+
+	return recordLocalID, nil
 }
 
 func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, error) {

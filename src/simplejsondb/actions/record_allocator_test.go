@@ -184,13 +184,13 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 
 	// Insert data into 3 different blocks
 	dummy, _ := allocator.Add(&core.Record{uint32(3), contents})
-	removedChainedRowID, _ := allocator.Add(&core.Record{uint32(4), contents})
-	chainedRowID, _ := allocator.Add(&core.Record{uint32(5), contents})
+	chainedRowRowID, _ := allocator.Add(&core.Record{uint32(4), contents})
+	removedChainedRowID, _ := allocator.Add(&core.Record{uint32(5), contents})
 	allocator.Add(&core.Record{uint32(6), "Some data"})
 	allocator.Add(&core.Record{uint32(7), "More data"})
 
 	// Ensure that the blocks are chained
-	if dummy.DataBlockID != removedChainedRowID.DataBlockID {
+	if dummy.DataBlockID != chainedRowRowID.DataBlockID {
 		t.Fatal("Did not create a chained row")
 	}
 
@@ -204,13 +204,20 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	blockMap = core.NewDataBlocksMap(dataBuffer)
 
 	// Ensure the records can be read after a reload
-	dataBlock, _ := dataBuffer.FetchBlock(chainedRowID.DataBlockID)
+	dataBlock, _ := dataBuffer.FetchBlock(chainedRowRowID.DataBlockID)
 	recordBlock := core.NewRecordBlock(dataBlock)
-	data, err := recordBlock.ReadRecordData(chainedRowID.LocalID)
+	first, err := recordBlock.ReadRecordData(chainedRowRowID.LocalID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data != contents {
+	chainedRowID, err := recordBlock.ChainedRowID(chainedRowRowID.LocalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataBlock, _ = dataBuffer.FetchBlock(chainedRowID.DataBlockID)
+	recordBlock = core.NewRecordBlock(dataBlock)
+	second, err := recordBlock.ReadRecordData(chainedRowID.LocalID)
+	if first+second != contents {
 		t.Error("Invalid contents found for record")
 	}
 

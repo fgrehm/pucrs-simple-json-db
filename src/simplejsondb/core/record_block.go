@@ -214,6 +214,7 @@ func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
 }
 
 func (rb *recordBlock) SetChainedRowID(localID uint16, rowID RowID) error {
+	log.Printf("SET_CHAINED from='%d:%d', to='%d:%d'", rb.block.ID, localID, rowID.DataBlockID, rowID.LocalID)
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
 		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.SetChainedRowID` (%d)", localID))
