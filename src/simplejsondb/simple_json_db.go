@@ -77,8 +77,8 @@ func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	db.buffer.MarkAsDirty(block.ID)
 
 	record := &core.Record{ID: recordId, Data: data}
-	insert := actions.NewRecordAllocator(db.buffer)
-	if err = insert.Run(record); err != nil {
+	allocator := actions.NewRecordAllocator(db.buffer)
+	if err = allocator.Add(record); err != nil {
 		return 0, err
 	}
 	// TODO: After inserting the record, need to update the BTree+ index
@@ -92,14 +92,8 @@ func (db *simpleJSONDB) RemoveRecord(id uint32) error {
 		return err
 	}
 
-	// TODO: Extract to a separate object and deal with chained rows
-	block, err := db.buffer.FetchBlock(rowID.DataBlockID)
-	if err != nil {
-		return err
-	}
-
-	rba := core.NewRecordBlock(block)
-	return rba.Remove(rowID.LocalID)
+	allocator := actions.NewRecordAllocator(db.buffer)
+	return allocator.Remove(rowID)
 }
 
 func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
@@ -113,7 +107,13 @@ func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
 func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
-	block, err := db.buffer.FetchBlock(3)
+	block, err := db.buffer.FetchBlock(0)
+	if err != nil {
+		return core.RowID{}, err
+	}
+	firstRecordDataBlock := core.NewControlBlock(block).FirstRecordDataBlock()
+
+	block, err = db.buffer.FetchBlock(firstRecordDataBlock)
 	if err != nil {
 		return core.RowID{}, err
 	}

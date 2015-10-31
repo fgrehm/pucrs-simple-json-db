@@ -5,12 +5,12 @@ import (
 	"simplejsondb/core"
 	"simplejsondb/dbio"
 
+	"fmt"
 	utils "test_utils"
 	"testing"
-	"fmt"
 )
 
-func TestRecordAllocator_BasicAllocation(t *testing.T) {
+func TestRecordAllocator_Add(t *testing.T) {
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),
@@ -36,10 +36,10 @@ func TestRecordAllocator_BasicAllocation(t *testing.T) {
 	for i := uint16(0); i < maxData; i++ {
 		contents += fmt.Sprintf("%d", i%10)
 	}
-	allocator.Run(&core.Record{uint32(1), contents})
+	allocator.Add(&core.Record{uint32(1), contents})
 
 	// Add a new record that will go into the next datablock on the list
-	allocator.Run(&core.Record{uint32(2), "Some data"})
+	allocator.Add(&core.Record{uint32(2), "Some data"})
 
 	// Flush data to data blocks and ensure that things work after a reload
 	dataBuffer.Sync()
@@ -68,6 +68,86 @@ func TestRecordAllocator_BasicAllocation(t *testing.T) {
 	controlBlock := core.NewControlBlock(controlDataBlock)
 	if controlBlock.NextAvailableRecordsDataBlockID() != 4 {
 		t.Errorf("Did not update the pointer to the next datablock that has allows insertion")
+	}
+}
+
+func TestRecordAllocator_Remove(t *testing.T) {
+	blocks := [][]byte{
+		make([]byte, dbio.DATABLOCK_SIZE),
+		make([]byte, dbio.DATABLOCK_SIZE),
+		nil,
+		make([]byte, dbio.DATABLOCK_SIZE),
+		make([]byte, dbio.DATABLOCK_SIZE),
+		make([]byte, dbio.DATABLOCK_SIZE),
+		make([]byte, dbio.DATABLOCK_SIZE),
+	}
+	fakeDataFile := utils.NewFakeDataFile(blocks)
+	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 10)
+	controlDataBlock, _ := dataBuffer.FetchBlock(0)
+	core.NewControlBlock(controlDataBlock).Format()
+	dataBuffer.MarkAsDirty(controlDataBlock.ID)
+	blockMap := core.NewDataBlocksMap(dataBuffer)
+	for i := uint16(0); i < 4; i++ {
+		blockMap.MarkAsUsed(i)
+	}
+
+	allocator := actions.NewRecordAllocator(dataBuffer)
+
+	// Prepare data to fill up a datablock up to its limit
+	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
+	contents := ""
+	for i := uint16(0); i < maxData; i++ {
+		contents += fmt.Sprintf("%d", i%10)
+	}
+
+	// Insert data into 3 different blocks
+	allocator.Add(&core.Record{uint32(3), contents})
+	allocator.Add(&core.Record{uint32(4), contents})
+	allocator.Add(&core.Record{uint32(5), contents})
+	allocator.Add(&core.Record{uint32(6), "Some data"})
+	allocator.Add(&core.Record{uint32(7), "More data"})
+
+	// Free up some datablocks
+	allocator.Remove(core.RowID{DataBlockID: 3, LocalID: 0})
+	allocator.Remove(core.RowID{DataBlockID: 5, LocalID: 0})
+
+	// Free part of another datablock
+	allocator.Remove(core.RowID{DataBlockID: 6, LocalID: 0})
+
+	// Flush data to data blocks and ensure that things work after a reload
+	dataBuffer.Sync()
+
+	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 4)
+	blockMap = core.NewDataBlocksMap(dataBuffer)
+
+	// Ensure blocks have been marked as free again
+	if blockMap.IsInUse(3) {
+		t.Errorf("Block 3 should have been marked as free")
+	}
+	if blockMap.IsInUse(5) {
+		t.Errorf("Block 5 should have been marked as free")
+	}
+
+	// Ensure the linked list is set up properly
+	// First records datablock is now at block 4
+	controlDataBlock, _ = dataBuffer.FetchBlock(0)
+	controlBlock := core.NewControlBlock(controlDataBlock)
+	if controlBlock.FirstRecordDataBlock() != 4 {
+		t.Fatal("First record datablock is set to the wrong block")
+	}
+
+	// Then the next block on the chain is at block 6
+	dataBlock, _ := dataBuffer.FetchBlock(4)
+	recordBlock := core.NewRecordBlock(dataBlock)
+	if recordBlock.NextBlockID() != 6 {
+		t.Fatal("First record datablock next block pointer is set to the wrong block")
+	}
+
+	// And the block 6 points back to the block 4
+	dataBlock, _ = dataBuffer.FetchBlock(6)
+	recordBlock = core.NewRecordBlock(dataBlock)
+	if recordBlock.PrevBlockID() != 4 {
+		t.Fatal("Second record datablock previous block pointer is incorrect")
 	}
 }
 

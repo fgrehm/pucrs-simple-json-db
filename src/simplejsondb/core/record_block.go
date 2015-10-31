@@ -10,8 +10,9 @@ import (
 )
 
 type RecordBlock interface {
-	FreeSpace() uint16
+	FreeSpaceForInsert() uint16
 	Utilization() uint16
+	TotalRecords() int
 	Add(recordID uint32, data []byte) uint16
 	SetChainedRowID(localID uint16, rowID RowID) error
 	ChainedRowID(localID uint16) (RowID, error)
@@ -21,6 +22,7 @@ type RecordBlock interface {
 	PrevBlockID() uint16
 	SetPrevBlockID(blockID uint16)
 	ReadRecordData(localID uint16) (string, error)
+	Clear()
 
 	// HACK: Temporary, meant to be around while we don't have a btree in place
 	IDs() []uint32
@@ -154,12 +156,27 @@ func (rb *recordBlock) Remove(localID uint16) error {
 	return nil
 }
 
+func (rb *recordBlock) Clear() {
+	rb.block.Write(POS_TOTAL_HEADERS, uint16(0))
+	rb.block.Write(POS_UTILIZATION, uint16(0))
+}
+
 func (rb *recordBlock) Utilization() uint16 {
 	utilization := rb.block.ReadUint16(POS_UTILIZATION)
 	if utilization == 0 {
 		utilization = MIN_UTILIZATION
 	}
 	return utilization
+}
+
+func (rb *recordBlock) TotalRecords() int {
+	records := 0
+	for _, h := range rb.parseHeaders() {
+		if h.recordID != 0 {
+			records += 1
+		}
+	}
+	return records
 }
 
 func (rb *recordBlock) NextBlockID() uint16 {
@@ -235,8 +252,27 @@ func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
 	return string(rb.block.Data[start:end]), nil
 }
 
-func (rb *recordBlock) FreeSpace() uint16 {
-	return dbio.DATABLOCK_SIZE - rb.Utilization()
+func (rb *recordBlock) FreeSpaceForInsert() uint16 {
+	freeSpace := dbio.DATABLOCK_SIZE - rb.Utilization()
+
+	// Do we need a new header?
+	newHeaderNeeded := true
+	for _, h := range rb.parseHeaders() {
+		if h.recordID == 0 {
+			newHeaderNeeded = false
+			break
+		}
+	}
+
+	if newHeaderNeeded {
+		if freeSpace > RECORD_HEADER_SIZE {
+			freeSpace -= RECORD_HEADER_SIZE
+		} else {
+			freeSpace = 0
+		}
+	}
+
+	return freeSpace
 }
 
 func (rb *recordBlock) defragment(headers recordBlockHeaders) {
