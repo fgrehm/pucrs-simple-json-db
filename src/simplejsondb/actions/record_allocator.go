@@ -8,7 +8,7 @@ import (
 )
 
 type RecordAllocator interface {
-	Add(record *core.Record) error
+	Add(record *core.Record) (core.RowID, error)
 	Remove(rowID core.RowID) error
 }
 
@@ -20,29 +20,22 @@ func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
 	return &recordAllocator{buffer}
 }
 
-func (ra *recordAllocator) Add(record *core.Record) error {
+func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	log.Printf("INSERT recordid=%d", record.ID)
 
 	controlDataBlock, err := ra.buffer.FetchBlock(0)
 	if err != nil {
-		return err
+		return core.RowID{}, err
 	}
 
 	controlBlock := core.NewControlBlock(controlDataBlock)
 	insertBlockID := controlBlock.NextAvailableRecordsDataBlockID()
-
-	// TODO: Check if the record fits the data block fetched. In case it doesn't fit,
-	//       "slice" the data into multiple blocks (aka chained rows). Use the amount
-	//       of bytes written returned by `recordBlock.Add` to decide
-	//       Don't forget to `recordBlock.SetNextRowID(localID, nextBlockID, nextLocalID)`
-	//       and `ra.buffer.MarkAsDirty(nextBlockID)`
-	//       Also need to take into consideration the linked list of data blocks and
-	//       update pointers when allocating a new datablock
+	var rowID core.RowID
 
 	for {
 		block, err := ra.buffer.FetchBlock(insertBlockID)
 		if err != nil {
-			return err
+			return core.RowID{}, err
 		}
 		recordBlock := core.NewRecordBlock(block)
 		recordLength := len(record.Data)
@@ -50,8 +43,8 @@ func (ra *recordAllocator) Add(record *core.Record) error {
 
 		// Does the record fit on the datablock?
 		if (int(freeSpaceForInsert) - recordLength) >= 0 {
-			recordBlock.Add(record.ID, []byte(record.Data[0:recordLength]))
-			// log.Println("New record RowID:", block.ID, localID)
+			localID := recordBlock.Add(record.ID, []byte(record.Data[0:recordLength]))
+			rowID = core.RowID{DataBlockID: block.ID, LocalID: localID}
 			break
 		}
 
@@ -65,28 +58,36 @@ func (ra *recordAllocator) Add(record *core.Record) error {
 			continue
 		}
 
-		currBlockID := insertBlockID
-		blocksMap := core.NewDataBlocksMap(ra.buffer)
-		insertBlockID = blocksMap.FirstFree()
-		blocksMap.MarkAsUsed(insertBlockID)
-		log.Printf("ALLOCATE blockid=%d, prevblockid=%d", insertBlockID, currBlockID)
-
-		// FIXME: Deal with Datafile with no space left
-
-		recordBlock.SetNextBlockID(insertBlockID)
-		block, err = ra.buffer.FetchBlock(insertBlockID)
+		newBlockID, err := ra.allocateNewBlock(insertBlockID)
 		if err != nil {
-			return err
+			return core.RowID{}, err
 		}
-		core.NewRecordBlock(block).SetPrevBlockID(currBlockID)
-		ra.buffer.MarkAsDirty(currBlockID)
+		recordBlock.SetNextBlockID(newBlockID)
+		ra.buffer.MarkAsDirty(insertBlockID)
 
-		controlBlock.SetNextAvailableRecordsDataBlockID(insertBlockID)
+		controlBlock.SetNextAvailableRecordsDataBlockID(newBlockID)
 		ra.buffer.MarkAsDirty(controlDataBlock.ID)
+
+		insertBlockID = newBlockID
 	}
 
 	ra.buffer.MarkAsDirty(insertBlockID)
-	return nil
+	return rowID, nil
+}
+
+func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, error) {
+	blocksMap := core.NewDataBlocksMap(ra.buffer)
+	newBlockID := blocksMap.FirstFree()
+	blocksMap.MarkAsUsed(newBlockID)
+	log.Printf("ALLOCATE blockid=%d, prevblockid=%d", newBlockID, startingBlockID)
+
+	block, err := ra.buffer.FetchBlock(newBlockID)
+	if err != nil {
+		return 0, err
+	}
+	core.NewRecordBlock(block).SetPrevBlockID(startingBlockID)
+
+	return newBlockID, nil
 }
 
 func (ra *recordAllocator) Remove(rowID core.RowID) error {

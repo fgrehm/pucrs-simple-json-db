@@ -78,7 +78,7 @@ func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 
 	record := &core.Record{ID: recordId, Data: data}
 	allocator := actions.NewRecordAllocator(db.buffer)
-	if err = allocator.Add(record); err != nil {
+	if _, err = allocator.Add(record); err != nil {
 		return 0, err
 	}
 	// TODO: After inserting the record, need to update the BTree+ index
