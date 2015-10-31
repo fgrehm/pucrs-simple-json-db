@@ -63,9 +63,6 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 		recordBlock.SetNextBlockID(newBlockID)
 		ra.buffer.MarkAsDirty(insertBlockID)
 
-		controlBlock.SetNextAvailableRecordsDataBlockID(newBlockID)
-		ra.buffer.MarkAsDirty(controlDataBlock.ID)
-
 		insertBlockID = newBlockID
 	}
 
@@ -102,6 +99,8 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 			if err != nil {
 				return 0, err
 			}
+			currRecordBlock.SetNextBlockID(nextBlockID)
+			ra.buffer.MarkAsDirty(currBlockID)
 		}
 
 		// Can we write something to the next data block?
@@ -109,13 +108,13 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 		if err != nil {
 			return 0, err
 		}
-		nextBlockCandidate := core.NewRecordBlock(nextDataBlockCandidate)
-		freeSpaceForInsertOnNewBlock := int(nextBlockCandidate.FreeSpaceForInsert())
+		nextBlock := core.NewRecordBlock(nextDataBlockCandidate)
+		freeSpaceForInsertOnNewBlock := int(nextBlock.FreeSpaceForInsert())
 
 		// The block is full, move on on the linked list
 		if freeSpaceForInsertOnNewBlock == 0 {
 			currBlockID = nextBlockID
-			nextBlockID = nextBlockCandidate.NextBlockID()
+			nextBlockID = nextBlock.NextBlockID()
 			continue
 		}
 
@@ -127,7 +126,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 		log.Debugf("Bytes to write %d", bytesToWrite)
 
 		// Write data and set up the chained row stuff
-		chainedLocalID := nextBlockCandidate.Add(record.ID, dataToWrite[0:bytesToWrite])
+		chainedLocalID := nextBlock.Add(record.ID, dataToWrite[0:bytesToWrite])
 		chainedRowID := core.RowID{DataBlockID: nextBlockID, LocalID: chainedLocalID}
 		currRecordBlock.SetChainedRowID(currLocalID, chainedRowID)
 		ra.buffer.MarkAsDirty(currBlockID)
@@ -136,7 +135,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 		// Continue writing on next blocks
 		currLocalID = chainedLocalID
 		currBlockID = nextBlockID
-		nextBlockID = nextBlockCandidate.NextBlockID()
+		nextBlockID = nextBlock.NextBlockID()
 		dataToWrite = dataToWrite[bytesToWrite:]
 	}
 
@@ -154,6 +153,14 @@ func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, err
 		return 0, err
 	}
 	core.NewRecordBlock(block).SetPrevBlockID(startingBlockID)
+
+	block, err = ra.buffer.FetchBlock(0)
+	if err != nil {
+		return 0, err
+	}
+	controlBlock := core.NewControlBlock(block)
+	controlBlock.SetNextAvailableRecordsDataBlockID(newBlockID)
+	ra.buffer.MarkAsDirty(block.ID)
 
 	return newBlockID, nil
 }

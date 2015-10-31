@@ -44,7 +44,7 @@ const (
 	POS_TOTAL_HEADERS = POS_UTILIZATION - 2
 	POS_NEXT_BLOCK    = POS_TOTAL_HEADERS - 2
 	POS_PREV_BLOCK    = POS_NEXT_BLOCK - 2
-	POS_FIRST_HEADER  = POS_PREV_BLOCK - RECORD_HEADER_SIZE - 1
+	POS_FIRST_HEADER  = POS_PREV_BLOCK - RECORD_HEADER_SIZE
 )
 
 type recordBlock struct {
@@ -52,10 +52,12 @@ type recordBlock struct {
 }
 
 type recordBlockHeader struct {
-	localID  uint16
-	recordID uint32
-	startsAt uint16
-	size     uint16
+	localID        uint16
+	recordID       uint32
+	startsAt       uint16
+	size           uint16
+	chainedBlockID uint16
+	chainedLocalID uint16
 }
 
 type recordBlockHeaders []*recordBlockHeader
@@ -332,10 +334,12 @@ func (rb *recordBlock) parseHeaders() recordBlockHeaders {
 	for localID := uint16(0); localID < totalHeaders; localID++ {
 		headerPtr := int(POS_FIRST_HEADER - localID*RECORD_HEADER_SIZE)
 		header := &recordBlockHeader{
-			localID:  localID,
-			recordID: rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
-			startsAt: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START),
-			size:     rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE),
+			localID:        localID,
+			recordID:       rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
+			startsAt:       rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START),
+			size:           rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE),
+			chainedBlockID: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_BLOCK_ID),
+			chainedLocalID: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_LOCAL_ID),
 		}
 		ret = append(ret, header)
 	}
@@ -349,7 +353,7 @@ func (rb *recordBlock) IDs() []uint32 {
 	ids := []uint32{}
 
 	for i := uint16(0); i < totalHeaders; i++ {
-		headerPtr := int(POS_FIRST_HEADER - i*RECORD_HEADER_SIZE)
+		headerPtr := int(POS_FIRST_HEADER) - int(i)*int(RECORD_HEADER_SIZE)
 		id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 		ids = append(ids, id)
 	}

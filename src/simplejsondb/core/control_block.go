@@ -7,7 +7,7 @@ import (
 const (
 	POS_NEXT_ID                  = 0
 	POS_NEXT_AVAILABLE_DATABLOCK = 4
-	POS_FIRST_BLOCK_PTR          = 4
+	POS_FIRST_BLOCK_PTR          = 6
 )
 
 type ControlBlock interface {

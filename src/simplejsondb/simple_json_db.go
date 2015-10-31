@@ -107,6 +107,7 @@ func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
 func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
+	log.Debugf("Looking up the RowID for %d", needle)
 	block, err := db.buffer.FetchBlock(0)
 	if err != nil {
 		return core.RowID{}, err
@@ -127,6 +128,7 @@ func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
 		}
 
 		nextBlockID := rba.NextBlockID()
+		log.Debugf("Reading the next block %d", nextBlockID)
 		if nextBlockID != 0 {
 			block, err = db.buffer.FetchBlock(nextBlockID)
 			if err != nil {

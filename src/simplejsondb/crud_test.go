@@ -6,7 +6,6 @@ import (
 
 	jsondb "simplejsondb"
 	dbio "simplejsondb/dbio"
-
 	utils "test_utils"
 )
 
@@ -26,7 +25,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 		data := fmt.Sprintf(`{"a":%d}`, i)
 		id, err := db.InsertRecord(data)
 		if err != nil {
-			t.Fatalf("Unexpected error returned '%s'", err)
+			t.Fatalf("Unexpected error returned for the %d-th record: '%s'", id, err)
 		}
 
 		record, err := db.FindRecord(id)
@@ -34,7 +33,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 			t.Fatalf("Unexpected error returned while reading %d (%s)", id, err)
 		}
 		if record.Data != data {
-			t.Errorf("Unexpected data returned (%s)", record.Data)
+			t.Errorf("Unexpected data returned, got %s, expected %s", record.Data, data)
 		}
 	}
 }

@@ -152,7 +152,6 @@ func TestRecordAllocator_Remove(t *testing.T) {
 }
 
 func TestRecordAllocator_ChainedRows(t *testing.T) {
-
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),

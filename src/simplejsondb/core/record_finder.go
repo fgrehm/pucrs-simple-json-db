@@ -1,6 +1,7 @@
 package core
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"simplejsondb/dbio"
 )
 
@@ -21,12 +22,34 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	rba := NewRecordBlock(block)
+	rb := NewRecordBlock(block)
 
-	// TODO: Deal with chained rows, BTree and the like
-	data, err := rba.ReadRecordData(rowID.LocalID)
+	log.Infof("FIND_RECORD recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
+	data, err := rb.ReadRecordData(rowID.LocalID)
 	if err != nil {
 		return nil, err
+	}
+	chainedRowID, err := rb.ChainedRowID(rowID.LocalID)
+	if err != nil {
+		return nil, err
+	}
+
+	for chainedRowID.DataBlockID != 0 {
+		block, err = rf.buffer.FetchBlock(chainedRowID.DataBlockID)
+		if err != nil {
+			return nil, err
+		}
+		rb = NewRecordBlock(block)
+		log.Infof("GET_CHAINED recordid=%d, chainedrowid='%d:%d'", rowID.RecordID, chainedRowID.DataBlockID, chainedRowID.LocalID)
+		chainedData, err := rb.ReadRecordData(chainedRowID.LocalID)
+		if err != nil {
+			return nil, err
+		}
+		data += chainedData
+		chainedRowID, err = rb.ChainedRowID(chainedRowID.LocalID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Record{ID: rowID.RecordID, Data: data}, nil
