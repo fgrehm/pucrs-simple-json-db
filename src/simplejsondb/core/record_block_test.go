@@ -48,11 +48,12 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 	}
 }
 
+// REFACTOR: This needs love
 func TestRecordBlock_Allocation(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
 	rb := core.NewRecordBlock(block)
 
-	rb.Add(uint32(10), []byte("0123456789"))
+	localIDForUpdate := rb.Add(uint32(10), []byte("0123456789"))
 	localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
 	rb.Add(uint32(12), []byte("9999999999"))
 
@@ -64,6 +65,11 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	if localID != newLocalID {
 		t.Error("Did not reuse the deleted record localid")
 	}
+
+	if err := rb.SoftRemove(localIDForUpdate); err != nil {
+		t.Fatal(err)
+	}
+	rb.Add(uint32(10), []byte("*UPDATED*"))
 
 	// "Force reload" the wrapper
 	rb = core.NewRecordBlock(block)
@@ -77,8 +83,8 @@ func TestRecordBlock_Allocation(t *testing.T) {
 		t.Errorf("Unexpected data found `%s`", data)
 	}
 	// Ensure things are persisted as they should
-	if string(block.Data[0:22]) != "0123456789999999999900" {
-		t.Errorf("Did not defrag the block. Block contents `%s`, expected `%s`", string(block.Data[0:92]), "0123456789999999999900")
+	if string(block.Data[0:21]) != "999999999900*UPDATED*" {
+		t.Errorf("Did not defrag the block. Block contents `%s`, expected `%s`", string(block.Data[0:21]), "99999999900*UPDATED*")
 	}
 
 	// Ensure this will change
@@ -105,12 +111,55 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	}
 
 	// Last but not least, ensure things are persisted as they should
-	if string(block.Data[0:32]) != "0123456789999999999900NNNNNNNNNN" {
-		t.Errorf("Invalid final state `%s`, expected `%s`", string(block.Data[0:32]), "0123456789999999999900NNNNNNNNNN")
+	if string(block.Data[0:31]) != "999999999900*UPDATED*NNNNNNNNNN" {
+		t.Errorf("Invalid final state `%s`, expected `%s`", string(block.Data[0:31]), "999999999900*UPDATED*NNNNNNNNNN")
+	}
+}
+
+func TestRecordBlock_UpdateFlow(t *testing.T) {
+	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
+	rb := core.NewRecordBlock(block)
+
+	rb.Add(uint32(10), []byte("0123456789"))
+	localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
+	rb.Add(uint32(12), []byte("9999999999"))
+
+	if err := rb.SoftRemove(localID); err != nil {
+		t.Fatal(err)
+	}
+	newLocalID := rb.Add(uint32(13), []byte("00"))
+	if localID == newLocalID {
+		t.Error("Reused the soft deleted record localid")
+	}
+
+	// "Force reload" the wrapper
+	rb = core.NewRecordBlock(block)
+
+	// Should not be able to read the data at this point
+	data, err := rb.ReadRecordData(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data != "" {
+		t.Errorf("Read data for a record that has been deleted `%s`", data)
+	}
+
+	// Replace record that was soft deleted
+	rb.Add(uint32(11), []byte("NNNNNNNNNN"))
+
+	// And make sure it can be read again using the same localID
+	data, err = rb.ReadRecordData(localID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data != "NNNNNNNNNN" {
+		t.Errorf("Unexpected data found `%s`", data)
 	}
 }
 
 func TestRecordBlock_ChainedRows(t *testing.T) {
+	t.Fatal("TODO")
+
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
 	rb := core.NewRecordBlock(block)
 

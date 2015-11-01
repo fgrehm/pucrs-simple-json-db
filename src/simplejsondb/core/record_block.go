@@ -17,6 +17,7 @@ type RecordBlock interface {
 	SetChainedRowID(localID uint16, rowID RowID) error
 	ChainedRowID(localID uint16) (RowID, error)
 	Remove(localID uint16) error
+	SoftRemove(localID uint16) error
 	NextBlockID() uint16
 	SetNextBlockID(blockID uint16)
 	PrevBlockID() uint16
@@ -66,16 +67,17 @@ func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
 	return &recordBlock{block}
 }
 
+// REFACTOR: This method is doing way too much
 func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	headers := rb.parseHeaders()
 	utilization := rb.Utilization()
 
 	var newHeader *recordBlockHeader
 
-	// Is there a header we can reuse?
+	// Do we have the record on the block or any gap we can reuse?
 	sort.Sort(headers)
 	for _, h := range headers {
-		if h.recordID == 0 {
+		if h.recordID == 0 || h.recordID == recordID {
 			newHeader = h
 			break
 		}
@@ -128,6 +130,8 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	rb.block.Write(POS_UTILIZATION, utilization)
 	rb.block.Write(POS_TOTAL_HEADERS, totalHeaders)
 
+	log.Infof("HEADERS %s", rb.parseHeaders())
+
 	return newHeader.localID
 }
 
@@ -135,7 +139,7 @@ func (rb *recordBlock) Remove(localID uint16) error {
 	// Records present on the block
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
-		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.Remove`, got %d", localID))
+		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.Remove`, got %d, totalheaders is %d", localID, totalHeaders))
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID*RECORD_HEADER_SIZE)
@@ -151,6 +155,36 @@ func (rb *recordBlock) Remove(localID uint16) error {
 	// Utilization goes down just by the amount of data taken by the record, the
 	// header is kept around so we do not "free" up the space taken by it
 	utilization := rb.Utilization() - rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE)
+	rb.block.Write(POS_UTILIZATION, utilization)
+
+	log.Infof("WRITE blockid=%d, utilization='%dbytes', totalheaders=%d", rb.block.ID, utilization, totalHeaders)
+
+	return nil
+}
+
+func (rb *recordBlock) SoftRemove(localID uint16) error {
+	// Records present on the block
+	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
+	if localID >= totalHeaders {
+		return errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.SoftRemove`, got %d, totalheaders is %d", localID, totalHeaders))
+	}
+
+	headerPtr := int(POS_FIRST_HEADER) - int(localID)*int(RECORD_HEADER_SIZE)
+	log.Infof("SOFT_DELETE rowid='%d:%d', recordid=%d, startsAt=%d, size=%d",
+		rb.block.ID,
+		localID,
+		rb.block.ReadUint32(headerPtr+HEADER_OFFSET_RECORD_ID),
+		rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_START),
+		rb.block.ReadUint16(headerPtr+HEADER_OFFSET_RECORD_SIZE))
+
+	currrentRecordSize := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_SIZE)
+	rb.block.Write(headerPtr+HEADER_OFFSET_RECORD_SIZE, uint32(0))
+	rb.block.Write(headerPtr+HEADER_OFFSET_CHAINED_ROW_BLOCK_ID, uint32(0))
+	rb.block.Write(headerPtr+HEADER_OFFSET_CHAINED_ROW_LOCAL_ID, uint32(0))
+
+	// Utilization goes down just by the amount of data taken by the record, the
+	// header is kept around so we do not "free" up the space taken by it
+	utilization := rb.Utilization() - currrentRecordSize
 	rb.block.Write(POS_UTILIZATION, utilization)
 
 	log.Infof("WRITE blockid=%d, utilization='%dbytes', totalheaders=%d", rb.block.ID, utilization, totalHeaders)
@@ -186,6 +220,7 @@ func (rb *recordBlock) NextBlockID() uint16 {
 }
 
 func (rb *recordBlock) SetNextBlockID(blockID uint16) {
+	log.Debugf("Setting %d next block id to %d", rb.block.ID, blockID)
 	rb.block.Write(POS_NEXT_BLOCK, blockID)
 }
 
@@ -194,10 +229,13 @@ func (rb *recordBlock) PrevBlockID() uint16 {
 }
 
 func (rb *recordBlock) SetPrevBlockID(blockID uint16) {
+	log.Debugf("Setting %d prev block id to %d", rb.block.ID, blockID)
 	rb.block.Write(POS_PREV_BLOCK, blockID)
 }
 
 func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
+	log.Debugf("%s", rb.parseHeaders())
+
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
 		return RowID{}, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ChainedRowID` (%d)", localID))
@@ -210,6 +248,7 @@ func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
 	}
 
 	return RowID{
+		RecordID:    rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
 		DataBlockID: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_BLOCK_ID),
 		LocalID:     rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_LOCAL_ID),
 	}, nil
@@ -282,14 +321,15 @@ func (rb *recordBlock) defragment(headers recordBlockHeaders) {
 	log.Infof("DEFRAG blockid=%d", rb.block.ID)
 
 	sort.Sort(headers)
+	log.Debugf("Block headers before defrag: %s", headers)
 	for i, h := range headers {
-		// Search for a blanky header
-		if h.recordID != 0 {
+		// Skip headers that repesent data
+		if h.recordID != 0 && h.size != 0 {
 			continue
 		}
 
 		// If the header has been zeroed out already, move on
-		if h.size == 0 {
+		if h.recordID == 0 && h.size == 0 {
 			continue
 		}
 
@@ -302,16 +342,17 @@ func (rb *recordBlock) defragment(headers recordBlockHeaders) {
 				rb.block.Data[dataPtr+p] = rb.block.Data[n.startsAt+p]
 			}
 			n.startsAt = dataPtr
-			rb.block.Write(int(POS_FIRST_HEADER)-int(n.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_START, n.startsAt)
+			rb.block.Write(int(POS_FIRST_HEADER)-int(n.localID)*int(RECORD_HEADER_SIZE)+int(HEADER_OFFSET_RECORD_START), n.startsAt)
 			dataPtr += n.size
 		}
 
 		// After compressing, we flag the header as zeroed out
 		h.size = 0
-		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_SIZE, h.size)
+		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+int(HEADER_OFFSET_RECORD_SIZE), h.size)
 		h.startsAt = dataPtr
-		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+HEADER_OFFSET_RECORD_START, h.startsAt)
+		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+int(HEADER_OFFSET_RECORD_START), h.startsAt)
 	}
+	log.Debugf("Block headers after defrag: %s", rb.parseHeaders())
 	log.Infof("END_DEFRAG blockid=%d", rb.block.ID)
 }
 

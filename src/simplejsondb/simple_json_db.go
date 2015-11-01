@@ -15,6 +15,7 @@ type SimpleJSONDB interface {
 	InsertRecord(data string) (uint32, error)
 	RemoveRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
+	UpdateRecord(id uint32, data string) error
 	Close() error
 }
 
@@ -84,6 +85,21 @@ func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	// TODO: After inserting the record, need to update the BTree+ index
 
 	return recordId, nil
+}
+
+func (db *simpleJSONDB) UpdateRecord(recordID uint32, data string) error {
+	rowID, err := db.findRowID(recordID)
+	if err != nil {
+		return err
+	}
+
+	record := &core.Record{ID: recordID, Data: data}
+	allocator := actions.NewRecordAllocator(db.buffer)
+	if err = allocator.Update(rowID, record.Data); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (db *simpleJSONDB) RemoveRecord(id uint32) error {

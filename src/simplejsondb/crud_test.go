@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	log "github.com/Sirupsen/logrus"
+
 	jsondb "simplejsondb"
 	dbio "simplejsondb/dbio"
 	utils "test_utils"
@@ -66,4 +68,47 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 			t.Errorf("Expected error to be returned when finding %d, got nil and data '%s'", id, record.Data)
 		}
 	}
+}
+
+func TestCreateAndUpdateRecords(t *testing.T) {
+	t.Fatal("TODO: Need to implement support for updating chained rows")
+
+	log.SetLevel(log.DebugLevel)
+	blocks := [][]byte{}
+	for i := 0; i < 10; i++ {
+		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
+	}
+
+	fakeDataFile := utils.NewFakeDataFile(blocks)
+	db, err := jsondb.NewWithDataFile(fakeDataFile)
+	if err != nil {
+		t.Fatalf("Unexpected error returned '%s'", err)
+	}
+
+	for i := 0; i < 1000; i++ {
+		data := fmt.Sprintf(`{"a":%d}`, i)
+		_, err := db.InsertRecord(data)
+		if err != nil {
+			t.Fatalf("Unexpected error returned when inserting '%s'", err)
+		}
+	}
+
+	for i := uint32(0); i < 1000; i++ {
+		data := fmt.Sprintf(`{"a":%d}`, -int(i))
+		id := i + 1
+
+		err := db.UpdateRecord(id, data)
+		if err != nil {
+			t.Fatalf("Unexpected error returned when updating '%s'", err)
+		}
+
+		record, err := db.FindRecord(id)
+		if err != nil {
+			t.Fatalf("Unexpected error returned while reading %d (%s)", id, err)
+		}
+		if record.Data != data {
+			t.Fatalf("Unexpected data returned, got `%s`, expected `%s`", record.Data, data)
+		}
+	}
+	log.SetLevel(log.WarnLevel)
 }

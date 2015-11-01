@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 
 	"simplejsondb/core"
@@ -9,6 +10,7 @@ import (
 
 type RecordAllocator interface {
 	Add(record *core.Record) (core.RowID, error)
+	Update(rowID core.RowID, newData string) error
 	Remove(rowID core.RowID) error
 }
 
@@ -135,6 +137,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 		// Continue writing on next blocks
 		currLocalID = chainedLocalID
 		currBlockID = nextBlockID
+		currRecordBlock = nextBlock
 		nextBlockID = nextBlock.NextBlockID()
 		dataToWrite = dataToWrite[bytesToWrite:]
 	}
@@ -171,15 +174,27 @@ func (ra *recordAllocator) Remove(rowID core.RowID) error {
 		return err
 	}
 
-	rb := core.NewRecordBlock(block)
-	if err = rb.Remove(rowID.LocalID); err != nil {
+	initialRecordBlock := core.NewRecordBlock(block)
+
+	chainedRowID, err := initialRecordBlock.ChainedRowID(rowID.LocalID)
+	if err != nil {
 		return err
 	}
 
-	// TODO: Deal with chained rows
+	// Remove chained rows first
+	if chainedRowID.DataBlockID != 0 {
+		if err := ra.Remove(chainedRowID); err != nil {
+			return err
+		}
+	}
 
-	if rb.TotalRecords() == 0 {
-		log.Printf("FREE blockid=%d, prevblockid=%d, nextblockid=%d", block.ID, rb.PrevBlockID(), rb.NextBlockID())
+	// Then remove the first block that makes up for the record
+	if err = initialRecordBlock.Remove(rowID.LocalID); err != nil {
+		return err
+	}
+
+	if initialRecordBlock.TotalRecords() == 0 {
+		log.Printf("FREE blockid=%d, prevblockid=%d, nextblockid=%d", block.ID, initialRecordBlock.PrevBlockID(), initialRecordBlock.NextBlockID())
 		if err := ra.removeFromList(block); err != nil {
 			return err
 		}
@@ -239,6 +254,35 @@ func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error 
 	// Get the block back into the pool of free blocks
 	blocksMap := core.NewDataBlocksMap(ra.buffer)
 	blocksMap.MarkAsFree(emptyDataBlock.ID)
+
+	return nil
+}
+
+func (ra *recordAllocator) Update(rowID core.RowID, newData string) error {
+	log.Infof("UPDATE recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
+
+	block, err := ra.buffer.FetchBlock(rowID.DataBlockID)
+	if err != nil {
+		return err
+	}
+
+	rb := core.NewRecordBlock(block)
+	chainedID, err := rb.ChainedRowID(rowID.LocalID)
+	if err != nil {
+		return err
+	}
+	if chainedID.DataBlockID == 0 {
+		ra.Remove(chainedID)
+	}
+
+	if err = rb.SoftRemove(rowID.LocalID); err != nil {
+		return err
+	}
+
+	localID := rb.Add(rowID.RecordID, []byte(newData))
+	if localID != rowID.LocalID {
+		panic(fmt.Sprintf("Something weird happened while updating the record, its local ID changed from %d to %d", rowID.LocalID, localID))
+	}
 
 	return nil
 }
