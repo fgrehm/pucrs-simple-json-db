@@ -10,6 +10,7 @@ import (
 )
 
 type RecordBlock interface {
+	DataBlockID() uint16
 	FreeSpaceForInsert() uint16
 	Utilization() uint16
 	TotalRecords() int
@@ -63,8 +64,8 @@ type recordBlockHeader struct {
 
 type recordBlockHeaders []*recordBlockHeader
 
-func NewRecordBlock(block *dbio.DataBlock) RecordBlock {
-	return &recordBlock{block}
+func (rb *recordBlock) DataBlockID() uint16 {
+	return rb.block.ID
 }
 
 // REFACTOR: This method is doing way too much
@@ -130,7 +131,7 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	rb.block.Write(POS_UTILIZATION, utilization)
 	rb.block.Write(POS_TOTAL_HEADERS, totalHeaders)
 
-	log.Infof("HEADERS %s", rb.parseHeaders())
+	// log.Debugf("HEADERS %s", rb.parseHeaders())
 
 	return newHeader.localID
 }

@@ -21,6 +21,7 @@ type SimpleJSONDB interface {
 
 type simpleJSONDB struct {
 	dataFile dbio.DataFile
+	repo     core.DataBlockRepository
 	buffer   dbio.DataBuffer
 }
 
@@ -34,20 +35,17 @@ func New(datafilePath string) (SimpleJSONDB, error) {
 
 func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
-	blockZero, err := dataBuffer.FetchBlock(0)
-	if err != nil {
-		return nil, err
-	}
-	jsonDB := &simpleJSONDB{dataFile, dataBuffer}
+	repo := core.NewDataBlockRepository(dataBuffer)
+	jsonDB := &simpleJSONDB{dataFile, repo, dataBuffer}
 
-	controlBlock := core.NewControlBlock(blockZero)
+	controlBlock := repo.ControlBlock()
 	if controlBlock.NextID() == 0 {
 		log.Println("FORMAT_DB")
 
 		controlBlock.Format()
-		dataBuffer.MarkAsDirty(blockZero.ID)
+		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
-		blockMap := core.NewDataBlocksMap(dataBuffer)
+		blockMap := repo.DataBlocksMap()
 		for i := uint16(0); i < 4; i++ {
 			blockMap.MarkAsUsed(i)
 		}
@@ -67,19 +65,14 @@ func (db *simpleJSONDB) Close() error {
 }
 
 func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
-	block, err := db.buffer.FetchBlock(0)
-	if err != nil {
-		return 0, err
-	}
-
-	cb := core.NewControlBlock(block)
+	cb := core.NewDataBlockRepository(db.buffer).ControlBlock()
 	recordId := cb.NextID()
 	cb.IncNextID()
-	db.buffer.MarkAsDirty(block.ID)
+	db.buffer.MarkAsDirty(cb.DataBlockID())
 
 	record := &core.Record{ID: recordId, Data: data}
 	allocator := actions.NewRecordAllocator(db.buffer)
-	if _, err = allocator.Add(record); err != nil {
+	if _, err := allocator.Add(record); err != nil {
 		return 0, err
 	}
 	// TODO: After inserting the record, need to update the BTree+ index
@@ -124,33 +117,20 @@ func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 // HACK: Temporary workaround while we don't have the BTree+ in place
 func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
 	log.Debugf("Looking up the RowID for %d", needle)
-	block, err := db.buffer.FetchBlock(0)
-	if err != nil {
-		return core.RowID{}, err
-	}
-	firstRecordDataBlock := core.NewControlBlock(block).FirstRecordDataBlock()
+	repo := core.NewDataBlockRepository(db.buffer)
 
-	block, err = db.buffer.FetchBlock(firstRecordDataBlock)
-	if err != nil {
-		return core.RowID{}, err
-	}
-
+	blockID := repo.ControlBlock().FirstRecordDataBlock()
 	for {
-		rba := core.NewRecordBlock(block)
-		for i, id := range rba.IDs() {
+		rb := repo.RecordBlock(blockID)
+		for i, id := range rb.IDs() {
 			if id == needle {
-				return core.RowID{RecordID: needle, DataBlockID: block.ID, LocalID: uint16(i)}, nil
+				return core.RowID{RecordID: needle, DataBlockID: blockID, LocalID: uint16(i)}, nil
 			}
 		}
 
-		nextBlockID := rba.NextBlockID()
-		log.Debugf("Reading the next block %d", nextBlockID)
-		if nextBlockID != 0 {
-			block, err = db.buffer.FetchBlock(nextBlockID)
-			if err != nil {
-				return core.RowID{}, err
-			}
-		} else {
+		blockID = rb.NextBlockID()
+		log.Debugf("Reading the next block %d", blockID)
+		if blockID == 0 {
 			return core.RowID{}, errors.New("Not found")
 		}
 	}

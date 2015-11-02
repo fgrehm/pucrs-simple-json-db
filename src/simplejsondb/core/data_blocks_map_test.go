@@ -1,7 +1,6 @@
-package core_test
+package core
 
 import (
-	"simplejsondb/core"
 	"simplejsondb/dbio"
 
 	"testing"
@@ -17,7 +16,7 @@ func TestDataBlocksMap(t *testing.T) {
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 2)
-	dbm := core.NewDataBlocksMap(dataBuffer)
+	dbm := &dataBlocksMap{dataBuffer}
 
 	// First position is free by default
 	if free := dbm.FirstFree(); free != 0 {

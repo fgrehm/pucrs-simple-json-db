@@ -21,10 +21,6 @@ const (
 	DATA_BLOCK_MAP_BLOCKS_COUNT = uint16(2)
 )
 
-func NewDataBlocksMap(dataBuffer dbio.DataBuffer) DataBlocksMap {
-	return &dataBlocksMap{dataBuffer}
-}
-
 func (dbm *dataBlocksMap) FirstFree() uint16 {
 	for blockIndex := uint16(0); blockIndex < DATA_BLOCK_MAP_BLOCKS_COUNT; blockIndex++ {
 		block, err := dbm.dataBuffer.FetchBlock(DATA_BLOCK_MAP_FIRST_BLOCK + blockIndex)

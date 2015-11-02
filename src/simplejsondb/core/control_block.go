@@ -11,6 +11,7 @@ const (
 )
 
 type ControlBlock interface {
+	DataBlockID() uint16
 	Format()
 	NextID() uint32
 	IncNextID()
@@ -24,8 +25,8 @@ type controlBlock struct {
 	block *dbio.DataBlock
 }
 
-func NewControlBlock(block *dbio.DataBlock) ControlBlock {
-	return &controlBlock{block}
+func (cb *controlBlock) DataBlockID() uint16 {
+	return cb.block.ID
 }
 
 func (cb *controlBlock) Format() {

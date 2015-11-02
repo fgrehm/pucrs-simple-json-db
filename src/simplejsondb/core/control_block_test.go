@@ -1,7 +1,6 @@
-package core_test
+package core
 
 import (
-	"simplejsondb/core"
 	"simplejsondb/dbio"
 
 	"fmt"
@@ -12,7 +11,7 @@ import (
 
 func TestControlBlock_NextID(t *testing.T) {
 	block := &dbio.DataBlock{Data: []byte{0x00, 0x00, 0x00, 0x10}}
-	cb := core.NewControlBlock(block)
+	cb := &controlBlock{block}
 
 	if id := cb.NextID(); id != 16 {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 16)
@@ -33,7 +32,7 @@ func TestControlBlock_NextID(t *testing.T) {
 
 func TestControlBlock_NextAvailableRecordsDataBlock(t *testing.T) {
 	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0x10, 0x01}}
-	cb := core.NewControlBlock(block)
+	cb := &controlBlock{block}
 
 	if id := cb.NextAvailableRecordsDataBlockID(); id != 4097 {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 16)

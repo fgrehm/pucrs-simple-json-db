@@ -1,7 +1,6 @@
-package core_test
+package core
 
 import (
-	"simplejsondb/core"
 	"simplejsondb/dbio"
 
 	"testing"
@@ -9,18 +8,18 @@ import (
 
 func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	prevUtilization := rb.Utilization()
 
 	localID := rb.Add(uint32(10), []byte("01234567890123456789"))
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 
 	// Did the utilization increase?
-	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE+20 {
-		t.Errorf("Allocated an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE+20, rb.Utilization())
+	if rb.Utilization()-prevUtilization != RECORD_HEADER_SIZE+20 {
+		t.Errorf("Allocated an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, RECORD_HEADER_SIZE+20, rb.Utilization())
 	}
 
 	// Can we read the record again?
@@ -38,20 +37,20 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 	}
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 	if _, err := rb.ReadRecordData(localID); err == nil {
 		t.Error("Did not return an error")
 	}
 
-	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE {
-		t.Errorf("Freed an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE, rb.Utilization())
+	if rb.Utilization()-prevUtilization != RECORD_HEADER_SIZE {
+		t.Errorf("Freed an unexpected amount of data, got %d, expected %d, total %d", rb.Utilization()-prevUtilization, RECORD_HEADER_SIZE, rb.Utilization())
 	}
 }
 
 // REFACTOR: This needs love
 func TestRecordBlock_Allocation(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	localIDForUpdate := rb.Add(uint32(10), []byte("0123456789"))
 	localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
@@ -72,7 +71,7 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	rb.Add(uint32(10), []byte("*UPDATED*"))
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 
 	// Can we read the record again?
 	data, err := rb.ReadRecordData(localID)
@@ -94,11 +93,11 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	rb.Add(uint32(14), []byte("NNNNNNNNNN"))
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 
 	// Did we update the utilization accordingly?
-	if rb.Utilization()-prevUtilization != core.RECORD_HEADER_SIZE+10 {
-		t.Errorf("Allocated an unexpected amount of data (allocated %d bytes, expected %d, total %d)", rb.Utilization()-prevUtilization, core.RECORD_HEADER_SIZE+10, rb.Utilization())
+	if rb.Utilization()-prevUtilization != RECORD_HEADER_SIZE+10 {
+		t.Errorf("Allocated an unexpected amount of data (allocated %d bytes, expected %d, total %d)", rb.Utilization()-prevUtilization, RECORD_HEADER_SIZE+10, rb.Utilization())
 	}
 
 	// Can we still read the record that filled in the gap?
@@ -118,7 +117,7 @@ func TestRecordBlock_Allocation(t *testing.T) {
 
 func TestRecordBlock_UpdateFlow(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	rb.Add(uint32(10), []byte("0123456789"))
 	localID := rb.Add(uint32(11), []byte("AAAAAAAAAA"))
@@ -133,7 +132,7 @@ func TestRecordBlock_UpdateFlow(t *testing.T) {
 	}
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 
 	// Should not be able to read the data at this point
 	data, err := rb.ReadRecordData(localID)
@@ -161,21 +160,21 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	t.Fatal("TODO")
 
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	// Ensure we don't set chained rows for unkown records
-	if err := rb.SetChainedRowID(1, core.RowID{}); err == nil {
+	if err := rb.SetChainedRowID(1, RowID{}); err == nil {
 		t.Fatal(err)
 	}
 
 	localID := rb.Add(uint32(14), []byte("NNNNNNNNNN"))
-	chainedID := core.RowID{DataBlockID: 1, LocalID: 2}
+	chainedID := RowID{DataBlockID: 1, LocalID: 2}
 	if err := rb.SetChainedRowID(localID, chainedID); err != nil {
 		t.Fatal(err)
 	}
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 	rowID, err := rb.ChainedRowID(localID)
 	if err != nil {
 		t.Fatal(err)
@@ -193,14 +192,14 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rowID != (core.RowID{}) {
+	if rowID != (RowID{}) {
 		t.Fatal("Invalid chained row ID found")
 	}
 }
 
 func TestRecordBlock_NextBlockID(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	if rb.NextBlockID() != 0 {
 		t.Fatal("Invalid next block ID found")
@@ -208,7 +207,7 @@ func TestRecordBlock_NextBlockID(t *testing.T) {
 	rb.SetNextBlockID(99)
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 	if rb.NextBlockID() != 99 {
 		t.Fatal("Invalid next block ID found")
 	}
@@ -216,7 +215,7 @@ func TestRecordBlock_NextBlockID(t *testing.T) {
 
 func TestRecordBlock_PrevBlockID(t *testing.T) {
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
-	rb := core.NewRecordBlock(block)
+	rb := &recordBlock{block}
 
 	if rb.PrevBlockID() != 0 {
 		t.Fatal("Invalid next block ID found")
@@ -224,7 +223,7 @@ func TestRecordBlock_PrevBlockID(t *testing.T) {
 	rb.SetPrevBlockID(99)
 
 	// "Force reload" the wrapper
-	rb = core.NewRecordBlock(block)
+	rb = &recordBlock{block}
 	if rb.PrevBlockID() != 99 {
 		t.Fatal("Invalid next block ID found")
 	}

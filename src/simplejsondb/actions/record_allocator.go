@@ -16,36 +16,31 @@ type RecordAllocator interface {
 
 type recordAllocator struct {
 	buffer dbio.DataBuffer
+	repo   core.DataBlockRepository
 }
 
 func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
-	return &recordAllocator{buffer}
+	repo := core.NewDataBlockRepository(buffer)
+	return &recordAllocator{buffer, repo}
 }
 
 func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	log.Printf("INSERT recordid=%d", record.ID)
 
-	controlDataBlock, err := ra.buffer.FetchBlock(0)
-	if err != nil {
-		return core.RowID{}, err
-	}
-
-	controlBlock := core.NewControlBlock(controlDataBlock)
+	controlBlock := ra.repo.ControlBlock()
 	insertBlockID := controlBlock.NextAvailableRecordsDataBlockID()
+
 	var localID uint16
+	var err error
 
 	for {
-		block, err := ra.buffer.FetchBlock(insertBlockID)
-		if err != nil {
-			return core.RowID{}, err
-		}
-		recordBlock := core.NewRecordBlock(block)
+		recordBlock := ra.repo.RecordBlock(insertBlockID)
 		freeSpaceForInsert := recordBlock.FreeSpaceForInsert()
 
 		// XXX: This is not ideal since it may result in having a single byte on a
 		//      datablock for a chained row
 		if freeSpaceForInsert > 0 {
-			localID, err = ra.allocateRecord(int(freeSpaceForInsert), block, record)
+			localID, err = ra.allocateRecord(int(freeSpaceForInsert), recordBlock, record)
 			if err != nil {
 				return core.RowID{}, err
 			}
@@ -72,10 +67,10 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	return core.RowID{DataBlockID: insertBlockID, LocalID: localID}, nil
 }
 
-func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *dbio.DataBlock, record *core.Record) (uint16, error) {
+func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock core.RecordBlock, record *core.Record) (uint16, error) {
 	dataToWrite := []byte(record.Data)
 	bytesToWrite := len(dataToWrite)
-	recordBlock := core.NewRecordBlock(initialBlock)
+	recordBlock := initialBlock
 
 	// Does the record fit on the datablock?
 	if len(dataToWrite) > freeSpaceForInsert {
@@ -86,7 +81,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 	recordLocalID := recordBlock.Add(record.ID, dataToWrite[0:bytesToWrite])
 	dataToWrite = dataToWrite[bytesToWrite:]
 
-	currBlockID := initialBlock.ID
+	currBlockID := initialBlock.DataBlockID()
 	currRecordBlock := recordBlock
 	currLocalID := recordLocalID
 	nextBlockID := recordBlock.NextBlockID()
@@ -106,11 +101,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 		}
 
 		// Can we write something to the next data block?
-		nextDataBlockCandidate, err := ra.buffer.FetchBlock(nextBlockID)
-		if err != nil {
-			return 0, err
-		}
-		nextBlock := core.NewRecordBlock(nextDataBlockCandidate)
+		nextBlock := ra.repo.RecordBlock(nextBlockID)
 		freeSpaceForInsertOnNewBlock := int(nextBlock.FreeSpaceForInsert())
 
 		// The block is full, move on on the linked list
@@ -146,37 +137,26 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock *
 }
 
 func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, error) {
-	blocksMap := core.NewDataBlocksMap(ra.buffer)
+	blocksMap := ra.repo.DataBlocksMap()
 	newBlockID := blocksMap.FirstFree()
 	blocksMap.MarkAsUsed(newBlockID)
+
 	log.Printf("ALLOCATE blockid=%d, prevblockid=%d", newBlockID, startingBlockID)
 
-	block, err := ra.buffer.FetchBlock(newBlockID)
-	if err != nil {
-		return 0, err
-	}
-	core.NewRecordBlock(block).SetPrevBlockID(startingBlockID)
+	ra.repo.RecordBlock(newBlockID).SetPrevBlockID(startingBlockID)
+	ra.buffer.MarkAsDirty(newBlockID)
 
-	block, err = ra.buffer.FetchBlock(0)
-	if err != nil {
-		return 0, err
-	}
-	controlBlock := core.NewControlBlock(block)
+	controlBlock := ra.repo.ControlBlock()
 	controlBlock.SetNextAvailableRecordsDataBlockID(newBlockID)
-	ra.buffer.MarkAsDirty(block.ID)
+	ra.buffer.MarkAsDirty(controlBlock.DataBlockID())
 
 	return newBlockID, nil
 }
 
 func (ra *recordAllocator) Remove(rowID core.RowID) error {
-	block, err := ra.buffer.FetchBlock(rowID.DataBlockID)
-	if err != nil {
-		return err
-	}
+	firstBlock := ra.repo.RecordBlock(rowID.DataBlockID)
 
-	initialRecordBlock := core.NewRecordBlock(block)
-
-	chainedRowID, err := initialRecordBlock.ChainedRowID(rowID.LocalID)
+	chainedRowID, err := firstBlock.ChainedRowID(rowID.LocalID)
 	if err != nil {
 		return err
 	}
@@ -189,13 +169,13 @@ func (ra *recordAllocator) Remove(rowID core.RowID) error {
 	}
 
 	// Then remove the first block that makes up for the record
-	if err = initialRecordBlock.Remove(rowID.LocalID); err != nil {
+	if err = firstBlock.Remove(rowID.LocalID); err != nil {
 		return err
 	}
 
-	if initialRecordBlock.TotalRecords() == 0 {
-		log.Printf("FREE blockid=%d, prevblockid=%d, nextblockid=%d", block.ID, initialRecordBlock.PrevBlockID(), initialRecordBlock.NextBlockID())
-		if err := ra.removeFromList(block); err != nil {
+	if firstBlock.TotalRecords() == 0 {
+		log.Printf("FREE blockid=%d, prevblockid=%d, nextblockid=%d", firstBlock.DataBlockID(), firstBlock.PrevBlockID(), firstBlock.NextBlockID())
+		if err := ra.removeFromList(firstBlock); err != nil {
 			return err
 		}
 	}
@@ -203,8 +183,7 @@ func (ra *recordAllocator) Remove(rowID core.RowID) error {
 	return nil
 }
 
-func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error {
-	emptyBlock := core.NewRecordBlock(emptyDataBlock)
+func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
 	prevBlockID := emptyBlock.PrevBlockID()
 	nextBlockID := emptyBlock.NextBlockID()
 
@@ -220,7 +199,7 @@ func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error 
 		if err != nil {
 			return err
 		}
-		controlBlock := core.NewControlBlock(controlDataBlock)
+		controlBlock := core.NewDataBlockRepository(ra.buffer).ControlBlock()
 		controlBlock.SetFirstRecordDataBlock(nextBlockID)
 		ra.buffer.MarkAsDirty(controlDataBlock.ID)
 	}
@@ -231,20 +210,12 @@ func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error 
 	}
 
 	// General case, set the next block pointer of the previous entry to the one after the block being deleted
-	prevDataBlock, err := ra.buffer.FetchBlock(prevBlockID)
-	if err != nil {
-		return err
-	}
-	prevBlock := core.NewRecordBlock(prevDataBlock)
+	prevBlock := ra.repo.RecordBlock(prevBlockID)
 	prevBlock.SetNextBlockID(nextBlockID)
 	ra.buffer.MarkAsDirty(prevBlockID)
 
 	// And point the next block to the one before this one
-	nextDataBlock, err := ra.buffer.FetchBlock(nextBlockID)
-	if err != nil {
-		return err
-	}
-	nextBlock := core.NewRecordBlock(nextDataBlock)
+	nextBlock := ra.repo.RecordBlock(nextBlockID)
 	nextBlock.SetPrevBlockID(prevBlockID)
 	ra.buffer.MarkAsDirty(nextBlockID)
 
@@ -252,8 +223,8 @@ func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error 
 	emptyBlock.Clear()
 
 	// Get the block back into the pool of free blocks
-	blocksMap := core.NewDataBlocksMap(ra.buffer)
-	blocksMap.MarkAsFree(emptyDataBlock.ID)
+	blocksMap := ra.repo.DataBlocksMap()
+	blocksMap.MarkAsFree(emptyBlock.DataBlockID())
 
 	return nil
 }
@@ -261,17 +232,12 @@ func (ra *recordAllocator) removeFromList(emptyDataBlock *dbio.DataBlock) error 
 func (ra *recordAllocator) Update(rowID core.RowID, newData string) error {
 	log.Infof("UPDATE recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
 
-	block, err := ra.buffer.FetchBlock(rowID.DataBlockID)
-	if err != nil {
-		return err
-	}
-
-	rb := core.NewRecordBlock(block)
+	rb := ra.repo.RecordBlock(rowID.DataBlockID)
 	chainedID, err := rb.ChainedRowID(rowID.LocalID)
 	if err != nil {
 		return err
 	}
-	if chainedID.DataBlockID == 0 {
+	if chainedID.DataBlockID != 0 {
 		ra.Remove(chainedID)
 	}
 
@@ -283,6 +249,7 @@ func (ra *recordAllocator) Update(rowID core.RowID, newData string) error {
 	if localID != rowID.LocalID {
 		panic(fmt.Sprintf("Something weird happened while updating the record, its local ID changed from %d to %d", rowID.LocalID, localID))
 	}
+	ra.buffer.MarkAsDirty(rowID.DataBlockID)
 
 	return nil
 }

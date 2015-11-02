@@ -21,10 +21,12 @@ func TestRecordAllocator_Add(t *testing.T) {
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 4)
-	controlDataBlock, _ := dataBuffer.FetchBlock(0)
-	core.NewControlBlock(controlDataBlock).Format()
-	dataBuffer.MarkAsDirty(controlDataBlock.ID)
-	blockMap := core.NewDataBlocksMap(dataBuffer)
+	repo := core.NewDataBlockRepository(dataBuffer)
+
+	controlBlock := repo.ControlBlock()
+	controlBlock.Format()
+	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
+	blockMap := repo.DataBlocksMap()
 	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
@@ -45,7 +47,8 @@ func TestRecordAllocator_Add(t *testing.T) {
 	// Flush data to data blocks and ensure that things work after a reload
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 4)
-	blockMap = core.NewDataBlocksMap(dataBuffer)
+	repo = core.NewDataBlockRepository(dataBuffer)
+	blockMap = repo.DataBlocksMap()
 
 	// Ensure new blocks has been marked as used
 	if !blockMap.IsInUse(3) || !blockMap.IsInUse(4) {
@@ -53,20 +56,17 @@ func TestRecordAllocator_Add(t *testing.T) {
 	}
 
 	// Ensure the blocks point to each other
-	firstRecordDataBlock, _ := dataBuffer.FetchBlock(3)
-	firstRecordBlock := core.NewRecordBlock(firstRecordDataBlock)
+	firstRecordBlock := repo.RecordBlock(3)
 	if firstRecordBlock.NextBlockID() != 4 {
 		t.Errorf("First allocated block does not point to the next one")
 	}
-	secondRecordDataBlock, _ := dataBuffer.FetchBlock(4)
-	secondRecordBlock := core.NewRecordBlock(secondRecordDataBlock)
+	secondRecordBlock := repo.RecordBlock(4)
 	if secondRecordBlock.PrevBlockID() != 3 {
 		t.Errorf("Second allocated block does not point to the previous one")
 	}
 
 	// Ensure the pointer for the next datablock that has free space has been updated
-	controlDataBlock, _ = dataBuffer.FetchBlock(0)
-	controlBlock := core.NewControlBlock(controlDataBlock)
+	controlBlock = repo.ControlBlock()
 	if controlBlock.NextAvailableRecordsDataBlockID() != 4 {
 		t.Errorf("Did not update the pointer to the next datablock that has allows insertion")
 	}
@@ -84,10 +84,12 @@ func TestRecordAllocator_Remove(t *testing.T) {
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 10)
-	controlDataBlock, _ := dataBuffer.FetchBlock(0)
-	core.NewControlBlock(controlDataBlock).Format()
-	dataBuffer.MarkAsDirty(controlDataBlock.ID)
-	blockMap := core.NewDataBlocksMap(dataBuffer)
+	repo := core.NewDataBlockRepository(dataBuffer)
+	controlBlock := repo.ControlBlock()
+	controlBlock.Format()
+	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
+
+	blockMap := repo.DataBlocksMap()
 	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
@@ -119,7 +121,8 @@ func TestRecordAllocator_Remove(t *testing.T) {
 	dataBuffer.Sync()
 
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 4)
-	blockMap = core.NewDataBlocksMap(dataBuffer)
+	repo = core.NewDataBlockRepository(dataBuffer)
+	blockMap = repo.DataBlocksMap()
 
 	// Ensure blocks have been marked as free again
 	if blockMap.IsInUse(3) {
@@ -131,22 +134,19 @@ func TestRecordAllocator_Remove(t *testing.T) {
 
 	// Ensure the linked list is set up properly
 	// First records datablock is now at block 4
-	controlDataBlock, _ = dataBuffer.FetchBlock(0)
-	controlBlock := core.NewControlBlock(controlDataBlock)
+	controlBlock = repo.ControlBlock()
 	if controlBlock.FirstRecordDataBlock() != 4 {
 		t.Fatal("First record datablock is set to the wrong block")
 	}
 
 	// Then the next block on the chain is at block 6
-	dataBlock, _ := dataBuffer.FetchBlock(4)
-	recordBlock := core.NewRecordBlock(dataBlock)
+	recordBlock := repo.RecordBlock(4)
 	if recordBlock.NextBlockID() != 6 {
 		t.Fatal("First record datablock next block pointer is set to the wrong block")
 	}
 
 	// And the block 6 points back to the block 4
-	dataBlock, _ = dataBuffer.FetchBlock(6)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(6)
 	if recordBlock.PrevBlockID() != 4 {
 		t.Fatal("Second record datablock previous block pointer is incorrect")
 	}
@@ -162,10 +162,12 @@ func TestRecordAllocator_Update(t *testing.T) {
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 4)
-	controlDataBlock, _ := dataBuffer.FetchBlock(0)
-	core.NewControlBlock(controlDataBlock).Format()
-	dataBuffer.MarkAsDirty(controlDataBlock.ID)
-	blockMap := core.NewDataBlocksMap(dataBuffer)
+	repo := core.NewDataBlockRepository(dataBuffer)
+	controlBlock := repo.ControlBlock()
+	controlBlock.Format()
+	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
+
+	blockMap := repo.DataBlocksMap()
 	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
@@ -194,11 +196,11 @@ func TestRecordAllocator_Update(t *testing.T) {
 	// Flush data to data blocks and ensure that things work after a reload
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 4)
-	blockMap = core.NewDataBlocksMap(dataBuffer)
+	repo = core.NewDataBlockRepository(dataBuffer)
+	blockMap = repo.DataBlocksMap()
 
 	// Ensure blocks have been updated
-	dataBlock, _ := dataBuffer.FetchBlock(3)
-	recordBlock := core.NewRecordBlock(dataBlock)
+	recordBlock := repo.RecordBlock(3)
 	data, err := recordBlock.ReadRecordData(0)
 	if err != nil {
 		t.Fatal(err)
@@ -207,8 +209,7 @@ func TestRecordAllocator_Update(t *testing.T) {
 		t.Errorf("First record did not get updated, read `%s`", data)
 	}
 
-	dataBlock, _ = dataBuffer.FetchBlock(4)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(4)
 	data, err = recordBlock.ReadRecordData(0)
 	if err != nil {
 		t.Fatal(err)
@@ -234,10 +235,12 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 10)
-	controlDataBlock, _ := dataBuffer.FetchBlock(0)
-	core.NewControlBlock(controlDataBlock).Format()
-	dataBuffer.MarkAsDirty(controlDataBlock.ID)
-	blockMap := core.NewDataBlocksMap(dataBuffer)
+	repo := core.NewDataBlockRepository(dataBuffer)
+
+	controlBlock := repo.ControlBlock()
+	controlBlock.Format()
+	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
+	blockMap := repo.DataBlocksMap()
 	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
@@ -271,12 +274,12 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	// Flush data to data blocks and ensure that things work after a reload
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 10)
+	repo = core.NewDataBlockRepository(dataBuffer)
+	blockMap = repo.DataBlocksMap()
 	allocator = actions.NewRecordAllocator(dataBuffer)
-	blockMap = core.NewDataBlocksMap(dataBuffer)
 
 	// Ensure the records can be read after a reload
-	dataBlock, _ := dataBuffer.FetchBlock(chainedRowRowID.DataBlockID)
-	recordBlock := core.NewRecordBlock(dataBlock)
+	recordBlock := repo.RecordBlock(chainedRowRowID.DataBlockID)
 	first, err := recordBlock.ReadRecordData(chainedRowRowID.LocalID)
 	if err != nil {
 		t.Fatal(err)
@@ -285,27 +288,25 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dataBlock, _ = dataBuffer.FetchBlock(chainedRowID.DataBlockID)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(chainedRowID.DataBlockID)
 	second, err := recordBlock.ReadRecordData(chainedRowID.LocalID)
 	if first+second != contents {
 		t.Error("Invalid contents found for record")
 	}
 
 	// Ensure deletes clear out headers properly
-	dataBlock, _ = dataBuffer.FetchBlock(removedChainedRowID.DataBlockID)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(removedChainedRowID.DataBlockID)
 	if _, err = recordBlock.ReadRecordData(removedChainedRowID.LocalID); err == nil {
 		t.Fatal("Did not clear out the record header of one of the a chained rows deleted")
 	}
-	dataBlock, _ = dataBuffer.FetchBlock(removedChainedRowID.DataBlockID + 1)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(removedChainedRowID.DataBlockID + 1)
 	if _, err = recordBlock.ReadRecordData(0); err == nil {
 		t.Fatal("Did not clear out the record header of the next block of the chained row")
 	}
 
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 10)
+	repo = core.NewDataBlockRepository(dataBuffer)
 	allocator = actions.NewRecordAllocator(dataBuffer)
 
 	log.SetLevel(log.DebugLevel)
@@ -316,8 +317,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 
 	// Keep track of the list of the following row ids of the chained row
 	rowIDs := []core.RowID{}
-	dataBlock, _ = dataBuffer.FetchBlock(chainedUpdateRowID.DataBlockID)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(chainedUpdateRowID.DataBlockID)
 	nextRowID, err := recordBlock.ChainedRowID(chainedUpdateRowID.LocalID)
 	if err != nil {
 		log.SetLevel(log.WarnLevel)
@@ -325,8 +325,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	}
 	rowIDs = append(rowIDs, nextRowID)
 
-	dataBlock, _ = dataBuffer.FetchBlock(nextRowID.DataBlockID)
-	recordBlock = core.NewRecordBlock(dataBlock)
+	recordBlock = repo.RecordBlock(nextRowID.DataBlockID)
 	nextRowID, err = recordBlock.ChainedRowID(nextRowID.LocalID)
 	if err != nil {
 		log.SetLevel(log.WarnLevel)

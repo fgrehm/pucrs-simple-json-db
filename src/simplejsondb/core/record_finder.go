@@ -18,11 +18,8 @@ func NewRecordFinder(buffer dbio.DataBuffer) RecordFinder {
 }
 
 func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
-	block, err := rf.buffer.FetchBlock(rowID.DataBlockID)
-	if err != nil {
-		return nil, err
-	}
-	rb := NewRecordBlock(block)
+	repo := NewDataBlockRepository(rf.buffer)
+	rb := repo.RecordBlock(rowID.DataBlockID)
 
 	log.Infof("FIND_RECORD recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
 	data, err := rb.ReadRecordData(rowID.LocalID)
@@ -35,11 +32,7 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 	}
 
 	for chainedRowID.DataBlockID != 0 {
-		block, err = rf.buffer.FetchBlock(chainedRowID.DataBlockID)
-		if err != nil {
-			return nil, err
-		}
-		rb = NewRecordBlock(block)
+		rb = repo.RecordBlock(chainedRowID.DataBlockID)
 		log.Infof("GET_CHAINED recordid=%d, chainedrowid='%d:%d'", rowID.RecordID, chainedRowID.DataBlockID, chainedRowID.LocalID)
 		chainedData, err := rb.ReadRecordData(chainedRowID.LocalID)
 		if err != nil {
