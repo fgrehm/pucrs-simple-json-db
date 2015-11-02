@@ -10,7 +10,7 @@ import (
 
 type RecordAllocator interface {
 	Add(record *core.Record) (core.RowID, error)
-	Update(rowID core.RowID, newData string) error
+	Update(rowID core.RowID, record *core.Record) error
 	Remove(rowID core.RowID) error
 }
 
@@ -40,7 +40,7 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 		// XXX: This is not ideal since it may result in having a single byte on a
 		//      datablock for a chained row
 		if freeSpaceForInsert > 0 {
-			localID, err = ra.allocateRecord(int(freeSpaceForInsert), recordBlock, record)
+			localID, err = ra.allocateRecord(int(freeSpaceForInsert), recordBlock, record.ID, []byte(record.Data))
 			if err != nil {
 				return core.RowID{}, err
 			}
@@ -64,76 +64,70 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	}
 
 	ra.buffer.MarkAsDirty(insertBlockID)
-	return core.RowID{DataBlockID: insertBlockID, LocalID: localID}, nil
+	return core.RowID{
+		RecordID:    record.ID,
+		DataBlockID: insertBlockID,
+		LocalID:     localID,
+	}, nil
 }
 
-func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock core.RecordBlock, record *core.Record) (uint16, error) {
-	dataToWrite := []byte(record.Data)
-	bytesToWrite := len(dataToWrite)
-	recordBlock := initialBlock
+func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock core.RecordBlock, recordID uint32, data []byte) (uint16, error) {
+	bytesToWrite := len(data)
 
 	// Does the record fit on the datablock?
-	if len(dataToWrite) > freeSpaceForInsert {
+	if bytesToWrite > freeSpaceForInsert {
 		bytesToWrite = freeSpaceForInsert
 	}
 
-	// Write as many bytes as we can
-	recordLocalID := recordBlock.Add(record.ID, dataToWrite[0:bytesToWrite])
-	dataToWrite = dataToWrite[bytesToWrite:]
+	// Write as many bytes as we can on the initial datablock
+	localID := initialBlock.Add(recordID, data[0:bytesToWrite])
+	ra.buffer.MarkAsDirty(initialBlock.DataBlockID())
 
-	currBlockID := initialBlock.DataBlockID()
-	currRecordBlock := recordBlock
-	currLocalID := recordLocalID
-	nextBlockID := recordBlock.NextBlockID()
-	var err error
-
-	for bytesToWrite = len(dataToWrite); bytesToWrite > 0; bytesToWrite = len(dataToWrite) {
-		log.Debugf("Remaining data `% x`", dataToWrite)
-
-		// Do we need a new block to add to the end of the list?
-		if nextBlockID == 0 {
-			nextBlockID, err = ra.allocateNewBlock(currBlockID)
-			if err != nil {
-				return 0, err
-			}
-			currRecordBlock.SetNextBlockID(nextBlockID)
-			ra.buffer.MarkAsDirty(currBlockID)
-		}
-
-		// Can we write something to the next data block?
-		nextBlock := ra.repo.RecordBlock(nextBlockID)
-		freeSpaceForInsertOnNewBlock := int(nextBlock.FreeSpaceForInsert())
-
-		// The block is full, move on on the linked list
-		if freeSpaceForInsertOnNewBlock == 0 {
-			currBlockID = nextBlockID
-			nextBlockID = nextBlock.NextBlockID()
-			continue
-		}
-
-		// At this point we can write something on the block, but does it fit on a single block?
-		if bytesToWrite > freeSpaceForInsertOnNewBlock {
-			bytesToWrite = freeSpaceForInsertOnNewBlock
-		}
-
-		log.Debugf("Bytes to write %d", bytesToWrite)
-
-		// Write data and set up the chained row stuff
-		chainedLocalID := nextBlock.Add(record.ID, dataToWrite[0:bytesToWrite])
-		chainedRowID := core.RowID{DataBlockID: nextBlockID, LocalID: chainedLocalID}
-		currRecordBlock.SetChainedRowID(currLocalID, chainedRowID)
-		ra.buffer.MarkAsDirty(currBlockID)
-		ra.buffer.MarkAsDirty(nextBlockID)
-
-		// Continue writing on next blocks
-		currLocalID = chainedLocalID
-		currBlockID = nextBlockID
-		currRecordBlock = nextBlock
-		nextBlockID = nextBlock.NextBlockID()
-		dataToWrite = dataToWrite[bytesToWrite:]
+	// If we wrote the whole record, we are done
+	if bytesToWrite == len(data) {
+		return localID, nil
 	}
 
-	return recordLocalID, nil
+	// Otherwise we move on to the next block that has free space and continue writing from there
+	data = data[bytesToWrite:]
+	recordBlock := initialBlock
+	prevBlock := recordBlock
+	prevLocalID := localID
+	for bytesToWrite = len(data); bytesToWrite > 0; bytesToWrite = len(data) {
+		for recordBlock.FreeSpaceForInsert() == 0 {
+			var err error
+			nextBlockID := recordBlock.NextBlockID()
+			if nextBlockID == 0 {
+				nextBlockID, err = ra.allocateNewBlock(recordBlock.DataBlockID())
+				if err != nil {
+					return 0, err
+				}
+			}
+			recordBlock = ra.repo.RecordBlock(nextBlockID)
+		}
+
+		// Write as much data as we can
+		freeSpaceForInsert = int(recordBlock.FreeSpaceForInsert())
+		if bytesToWrite > freeSpaceForInsert {
+			bytesToWrite = freeSpaceForInsert
+		}
+		nextLocalID := recordBlock.Add(recordID, data[0:bytesToWrite])
+		ra.buffer.MarkAsDirty(recordBlock.DataBlockID())
+		nextRowID := core.RowID{RecordID: recordID, DataBlockID: recordBlock.DataBlockID(), LocalID: nextLocalID}
+
+		// And wire up the chain
+		prevBlock.SetChainedRowID(prevLocalID, nextRowID)
+		ra.buffer.MarkAsDirty(prevBlock.DataBlockID())
+
+		// "Consume" the chunk of bytes
+		data = data[bytesToWrite:]
+
+		// Keep track of the last block used on the chain
+		prevBlock = recordBlock
+		prevLocalID = nextLocalID
+	}
+
+	return localID, nil
 }
 
 func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, error) {
@@ -145,6 +139,9 @@ func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, err
 
 	ra.repo.RecordBlock(newBlockID).SetPrevBlockID(startingBlockID)
 	ra.buffer.MarkAsDirty(newBlockID)
+
+	ra.repo.RecordBlock(startingBlockID).SetNextBlockID(newBlockID)
+	ra.buffer.MarkAsDirty(startingBlockID)
 
 	controlBlock := ra.repo.ControlBlock()
 	controlBlock.SetNextAvailableRecordsDataBlockID(newBlockID)
@@ -229,7 +226,7 @@ func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
 	return nil
 }
 
-func (ra *recordAllocator) Update(rowID core.RowID, newData string) error {
+func (ra *recordAllocator) Update(rowID core.RowID, record *core.Record) error {
 	log.Infof("UPDATE recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
 
 	rb := ra.repo.RecordBlock(rowID.DataBlockID)
@@ -245,11 +242,11 @@ func (ra *recordAllocator) Update(rowID core.RowID, newData string) error {
 		return err
 	}
 
-	localID := rb.Add(rowID.RecordID, []byte(newData))
-	if localID != rowID.LocalID {
-		panic(fmt.Sprintf("Something weird happened while updating the record, its local ID changed from %d to %d", rowID.LocalID, localID))
+	freeSpaceForInsert := rb.FreeSpaceForInsert()
+	localID, err := ra.allocateRecord(int(freeSpaceForInsert), rb, record.ID, []byte(record.Data))
+	if rowID.LocalID != localID {
+		panic(fmt.Sprintf("Something weird happened while updating the record, its local ID changed from %+v to %+v", rowID.LocalID, localID))
 	}
-	ra.buffer.MarkAsDirty(rowID.DataBlockID)
 
-	return nil
+	return err
 }

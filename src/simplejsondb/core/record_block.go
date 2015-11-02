@@ -188,7 +188,7 @@ func (rb *recordBlock) SoftRemove(localID uint16) error {
 	utilization := rb.Utilization() - currrentRecordSize
 	rb.block.Write(POS_UTILIZATION, utilization)
 
-	log.Infof("WRITE blockid=%d, utilization='%dbytes', totalheaders=%d", rb.block.ID, utilization, totalHeaders)
+	log.Infof("SOFT_DELETE_WRITE blockid=%d, utilization='%dbytes', totalheaders=%d", rb.block.ID, utilization, totalHeaders)
 
 	return nil
 }
@@ -235,8 +235,6 @@ func (rb *recordBlock) SetPrevBlockID(blockID uint16) {
 }
 
 func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
-	log.Debugf("%s", rb.parseHeaders())
-
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
 		return RowID{}, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ChainedRowID` (%d)", localID))
@@ -322,7 +320,7 @@ func (rb *recordBlock) defragment(headers recordBlockHeaders) {
 	log.Infof("DEFRAG blockid=%d", rb.block.ID)
 
 	sort.Sort(headers)
-	log.Debugf("Block headers before defrag: %s", headers)
+	// log.Debugf("Block headers before defrag: %s", headers)
 	for i, h := range headers {
 		// Skip headers that repesent data
 		if h.recordID != 0 && h.size != 0 {
@@ -353,7 +351,7 @@ func (rb *recordBlock) defragment(headers recordBlockHeaders) {
 		h.startsAt = dataPtr
 		rb.block.Write(int(POS_FIRST_HEADER)-int(h.localID)*int(RECORD_HEADER_SIZE)+int(HEADER_OFFSET_RECORD_START), h.startsAt)
 	}
-	log.Debugf("Block headers after defrag: %s", rb.parseHeaders())
+	// log.Debugf("Block headers after defrag: %s", rb.parseHeaders())
 	log.Infof("END_DEFRAG blockid=%d", rb.block.ID)
 }
 

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	log "github.com/Sirupsen/logrus"
-
 	jsondb "simplejsondb"
 	dbio "simplejsondb/dbio"
 	utils "test_utils"
@@ -71,11 +69,8 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 }
 
 func TestCreateAndUpdateRecords(t *testing.T) {
-	t.Fatal("TODO: Need to implement support for updating chained rows")
-
-	log.SetLevel(log.DebugLevel)
 	blocks := [][]byte{}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 15; i++ {
 		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
 	}
 
@@ -99,16 +94,18 @@ func TestCreateAndUpdateRecords(t *testing.T) {
 
 		err := db.UpdateRecord(id, data)
 		if err != nil {
-			t.Fatalf("Unexpected error returned when updating '%s'", err)
+			t.Errorf("Unexpected error returned when updating record `%d` '%s'", id, err)
+			continue
 		}
 
 		record, err := db.FindRecord(id)
 		if err != nil {
-			t.Fatalf("Unexpected error returned while reading %d (%s)", id, err)
+			t.Errorf("Unexpected error returned while reading %d (%s)", id, err)
+			continue
 		}
 		if record.Data != data {
-			t.Fatalf("Unexpected data returned, got `%s`, expected `%s`", record.Data, data)
+			t.Errorf("Unexpected data returned, got `%s`, expected `%s`", record.Data, data)
+			continue
 		}
 	}
-	log.SetLevel(log.WarnLevel)
 }

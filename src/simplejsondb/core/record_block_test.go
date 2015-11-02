@@ -157,8 +157,6 @@ func TestRecordBlock_UpdateFlow(t *testing.T) {
 }
 
 func TestRecordBlock_ChainedRows(t *testing.T) {
-	t.Fatal("TODO")
-
 	block := &dbio.DataBlock{Data: make([]byte, dbio.DATABLOCK_SIZE)}
 	rb := &recordBlock{block}
 
@@ -168,7 +166,7 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	}
 
 	localID := rb.Add(uint32(14), []byte("NNNNNNNNNN"))
-	chainedID := RowID{DataBlockID: 1, LocalID: 2}
+	chainedID := RowID{RecordID: 14, DataBlockID: 1, LocalID: 2}
 	if err := rb.SetChainedRowID(localID, chainedID); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +178,7 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	if rowID != chainedID {
-		t.Fatal("Invalid chained row ID found")
+		t.Fatalf("Invalid chained row ID found, %+v", rowID)
 	}
 
 	// Ensure the chained row id gets restored after removing and inserting a new record
@@ -192,8 +190,8 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rowID != (RowID{}) {
-		t.Fatal("Invalid chained row ID found")
+	if rowID != (RowID{RecordID: 15}) {
+		t.Fatalf("Invalid chained row ID found, %+v", rowID)
 	}
 }
 

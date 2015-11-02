@@ -6,7 +6,6 @@ import (
 	"simplejsondb/dbio"
 
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	utils "test_utils"
 	"testing"
 )
@@ -180,16 +179,18 @@ func TestRecordAllocator_Update(t *testing.T) {
 	for i := uint16(0); i < maxData; i++ {
 		contents += fmt.Sprintf("%d", i%10)
 	}
-	allocator.Add(&core.Record{uint32(1), contents})
+	allocator.Add(&core.Record{1, contents})
 
 	// Add a new record that will go into the next datablock on the list
-	allocator.Add(&core.Record{uint32(2), "Some data"})
+	allocator.Add(&core.Record{2, "Some data"})
 
 	// Update records
-	if err := allocator.Update(core.RowID{RecordID: uint32(1), DataBlockID: 3, LocalID: 0}, "NEW CONTENTS"); err != nil {
+	rowID := core.RowID{RecordID: 1, DataBlockID: 3, LocalID: 0}
+	if err := allocator.Update(rowID, &core.Record{ID: 1, Data: "NEW CONTENTS"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := allocator.Update(core.RowID{RecordID: uint32(2), DataBlockID: 4, LocalID: 0}, "EVEN MORE!"); err != nil {
+	rowID = core.RowID{RecordID: 2, DataBlockID: 4, LocalID: 0}
+	if err := allocator.Update(rowID, &core.Record{ID: 2, Data: "EVEN MORE!"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -220,8 +221,6 @@ func TestRecordAllocator_Update(t *testing.T) {
 }
 
 func TestRecordAllocator_ChainedRows(t *testing.T) {
-	t.Fatal("TODO")
-
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),
@@ -249,14 +248,13 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 
 	// Prepare data to fill up a datablock close to its limit
 	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
-	maxData -= 100
 	contents := ""
 	for i := uint16(0); i < maxData; i++ {
 		contents += fmt.Sprintf("%d", i%10)
 	}
 
 	// Insert data into 3 different blocks
-	dummy, _ := allocator.Add(&core.Record{uint32(3), contents})
+	dummy, _ := allocator.Add(&core.Record{uint32(3), contents[0:maxData-100]})
 	chainedRowRowID, _ := allocator.Add(&core.Record{uint32(4), contents})
 	removedChainedRowID, _ := allocator.Add(&core.Record{uint32(5), contents})
 	allocator.Add(&core.Record{uint32(6), "Some data"})
@@ -264,7 +262,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 
 	// Ensure that the blocks are chained
 	if dummy.DataBlockID != chainedRowRowID.DataBlockID {
-		t.Fatal("Did not create a chained row")
+		t.Fatalf("Did not create a chained row, expected record to be written on block %d but was written on block %d", dummy.DataBlockID, chainedRowRowID.DataBlockID)
 	}
 
 	// Ensure we exercise the code path that deletes chained rows
@@ -291,7 +289,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	recordBlock = repo.RecordBlock(chainedRowID.DataBlockID)
 	second, err := recordBlock.ReadRecordData(chainedRowID.LocalID)
 	if first+second != contents {
-		t.Error("Invalid contents found for record")
+		t.Errorf("Invalid contents found for record, found `%s` and `%s`, expected `%s`", first, second, contents)
 	}
 
 	// Ensure deletes clear out headers properly
@@ -309,8 +307,6 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	repo = core.NewDataBlockRepository(dataBuffer)
 	allocator = actions.NewRecordAllocator(dataBuffer)
 
-	log.SetLevel(log.DebugLevel)
-
 	// Add and update a chained row that spans 3 blocks
 	bigContents := contents + contents + contents
 	chainedUpdateRowID, _ := allocator.Add(&core.Record{uint32(9), bigContents})
@@ -320,7 +316,6 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	recordBlock = repo.RecordBlock(chainedUpdateRowID.DataBlockID)
 	nextRowID, err := recordBlock.ChainedRowID(chainedUpdateRowID.LocalID)
 	if err != nil {
-		log.SetLevel(log.WarnLevel)
 		t.Fatal(err)
 	}
 	rowIDs = append(rowIDs, nextRowID)
@@ -328,16 +323,28 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	recordBlock = repo.RecordBlock(nextRowID.DataBlockID)
 	nextRowID, err = recordBlock.ChainedRowID(nextRowID.LocalID)
 	if err != nil {
-		log.SetLevel(log.WarnLevel)
 		t.Fatal(err)
 	}
 	rowIDs = append(rowIDs, nextRowID)
+	if len(rowIDs) != 2 {
+		t.Errorf("Spread record on more blocks than expected %+v", rowIDs)
+	}
 
 	// Change record to be really small
-	allocator.Update(chainedUpdateRowID, "small string")
+	allocator.Update(chainedUpdateRowID, &core.Record{ID: chainedUpdateRowID.RecordID, Data: "a string"})
 
 	// Ensure the next element on the chained row list got cleared
-	t.Error("Ensure the next element on the chained row list got cleared")
+	for _, rowID := range rowIDs {
+		_, err := repo.RecordBlock(rowID.DataBlockID).ReadRecordData(rowID.LocalID)
+		if err == nil {
+			t.Errorf("Did not clear chained row %+v", rowID)
+		}
+	}
 
-	log.SetLevel(log.WarnLevel)
+	// Ensure we can read it
+	recordBlock = repo.RecordBlock(chainedUpdateRowID.DataBlockID)
+	data, _ := recordBlock.ReadRecordData(chainedRowID.LocalID)
+	if data != "a string" {
+		t.Error("Invalid contents found for record")
+	}
 }

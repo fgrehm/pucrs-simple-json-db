@@ -88,7 +88,7 @@ func (db *simpleJSONDB) UpdateRecord(recordID uint32, data string) error {
 
 	record := &core.Record{ID: recordID, Data: data}
 	allocator := actions.NewRecordAllocator(db.buffer)
-	if err = allocator.Update(rowID, record.Data); err != nil {
+	if err = allocator.Update(rowID, record); err != nil {
 		return err
 	}
 
