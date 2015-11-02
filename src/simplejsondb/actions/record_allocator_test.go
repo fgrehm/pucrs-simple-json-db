@@ -254,7 +254,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	}
 
 	// Insert data into 3 different blocks
-	dummy, _ := allocator.Add(&core.Record{uint32(3), contents[0:maxData-100]})
+	dummy, _ := allocator.Add(&core.Record{uint32(3), contents[0 : maxData-100]})
 	chainedRowRowID, _ := allocator.Add(&core.Record{uint32(4), contents})
 	removedChainedRowID, _ := allocator.Add(&core.Record{uint32(5), contents})
 	allocator.Add(&core.Record{uint32(6), "Some data"})
