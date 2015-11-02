@@ -74,13 +74,22 @@ func (rb *recordBlock) Add(recordID uint32, data []byte) uint16 {
 	utilization := rb.Utilization()
 
 	var newHeader *recordBlockHeader
-
-	// Do we have the record on the block or any gap we can reuse?
 	sort.Sort(headers)
+
+	// Do we have the record on the block
 	for _, h := range headers {
-		if h.recordID == 0 || h.recordID == recordID {
+		if h.recordID == recordID {
 			newHeader = h
 			break
+		}
+	}
+	// Or maybe we have a gap we can reuse?
+	if newHeader == nil {
+		for _, h := range headers {
+			if h.recordID == 0 {
+				newHeader = h
+				break
+			}
 		}
 	}
 
