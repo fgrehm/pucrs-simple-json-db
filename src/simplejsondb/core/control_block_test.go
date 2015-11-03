@@ -48,3 +48,12 @@ func TestControlBlock_NextAvailableRecordsDataBlock(t *testing.T) {
 		t.Errorf("Invalid data written to block (% x)", block.Data)
 	}
 }
+
+func TestControlBlock_FirstBTreeDataBlock(t *testing.T) {
+	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09}}
+	cb := &controlBlock{block}
+
+	if blockID := cb.FirstBTreeDataBlock(); blockID != 9 {
+		t.Errorf("First BTree datablock pointer was not read, got %d and expected %d", blockID, 9)
+	}
+}
