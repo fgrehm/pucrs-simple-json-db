@@ -9,6 +9,10 @@ type DataBlock struct {
 	Data []byte
 }
 
+func (db *DataBlock) ReadUint8(startingAt int) uint8 {
+	return uint8(db.Data[startingAt])
+}
+
 func (db *DataBlock) ReadUint16(startingAt int) uint16 {
 	return DatablockByteOrder.Uint16(db.Data[startingAt : startingAt+2])
 }
@@ -23,6 +27,8 @@ func (db *DataBlock) ReadString(startingAt, length int) string {
 
 func (db *DataBlock) Write(position int, v interface{}) {
 	switch x := v.(type) {
+	case uint8:
+		db.Data[position] = x
 	case []byte:
 		lastPosition := position + len(x)
 		i := 0
