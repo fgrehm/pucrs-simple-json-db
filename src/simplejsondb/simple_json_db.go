@@ -40,13 +40,23 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 
 	controlBlock := repo.ControlBlock()
 	if controlBlock.NextID() == 0 {
+		// TODO: PUSH FORMAT LOGIC OUT TO A SEPARATE OBJECT AND REUSE ON TESTS
+
 		log.Println("FORMAT_DB")
 
 		controlBlock.Format()
 		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
+		rootBlock, err := dataBuffer.FetchBlock(controlBlock.FirstBTreeDataBlock())
+		if err != nil {
+			return nil, err
+		}
+		indexRoot := core.CreateBTreeLeaf(rootBlock)
+		dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
+
 		blockMap := repo.DataBlocksMap()
-		for i := uint16(0); i < 4; i++ {
+		// REFACTOR: This 5 should be calculated somehow
+		for i := uint16(0); i < 5; i++ {
 			blockMap.MarkAsUsed(i)
 		}
 
@@ -64,6 +74,7 @@ func (db *simpleJSONDB) Close() error {
 	return db.dataFile.Close()
 }
 
+// TODO: Delegate to an insert action
 func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	cb := core.NewDataBlockRepository(db.buffer).ControlBlock()
 	recordId := cb.NextID()
@@ -80,6 +91,7 @@ func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
 	return recordId, nil
 }
 
+// TODO: Delegate to an update action
 func (db *simpleJSONDB) UpdateRecord(recordID uint32, data string) error {
 	rowID, err := db.findRowID(recordID)
 	if err != nil {
@@ -95,6 +107,7 @@ func (db *simpleJSONDB) UpdateRecord(recordID uint32, data string) error {
 	return nil
 }
 
+// TODO: Delegate to a remove action
 func (db *simpleJSONDB) RemoveRecord(id uint32) error {
 	rowID, err := db.findRowID(id)
 	if err != nil {
