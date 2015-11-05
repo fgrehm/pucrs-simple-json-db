@@ -6,8 +6,10 @@ import (
 
 type DataBlockRepository interface {
 	ControlBlock() ControlBlock
-	RecordBlock(blockID uint16) RecordBlock
 	DataBlocksMap() DataBlocksMap
+	RecordBlock(blockID uint16) RecordBlock
+	BTreeNode(blockID uint16) BTreeNode
+	BTreeLeaf(blockID uint16) BTreeLeaf
 }
 
 type dataBlockRepository struct {
@@ -22,12 +24,20 @@ func (r *dataBlockRepository) ControlBlock() ControlBlock {
 	return &controlBlock{r.fetchBlock(0)}
 }
 
+func (r *dataBlockRepository) DataBlocksMap() DataBlocksMap {
+	return &dataBlocksMap{r.buffer}
+}
+
 func (r *dataBlockRepository) RecordBlock(blockID uint16) RecordBlock {
 	return &recordBlock{r.fetchBlock(blockID)}
 }
 
-func (r *dataBlockRepository) DataBlocksMap() DataBlocksMap {
-	return &dataBlocksMap{r.buffer}
+func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
+	return &bTreeNode{r.fetchBlock(blockID)}
+}
+
+func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {
+	return &bTreeLeaf{&bTreeNode{r.fetchBlock(blockID)}}
 }
 
 func (r *dataBlockRepository) fetchBlock(blockID uint16) *dbio.DataBlock {

@@ -40,7 +40,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 
 func TestCreateAndRemoveRecords(t *testing.T) {
 	blocks := [][]byte{}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
 	}
 
