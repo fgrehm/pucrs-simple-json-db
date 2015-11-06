@@ -47,7 +47,7 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 		controlBlock.Format()
 		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
-		rootBlock, err := dataBuffer.FetchBlock(controlBlock.FirstBTreeDataBlock())
+		rootBlock, err := dataBuffer.FetchBlock(controlBlock.BTreeRootBlock())
 		if err != nil {
 			return nil, err
 		}

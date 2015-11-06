@@ -33,7 +33,12 @@ func (r *dataBlockRepository) RecordBlock(blockID uint16) RecordBlock {
 }
 
 func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
-	return &bTreeNode{r.fetchBlock(blockID)}
+	node := &bTreeNode{r.fetchBlock(blockID)}
+	if node.IsLeaf() {
+		return &bTreeLeaf{node}
+	} else {
+		return &bTreeBranch{node}
+	}
 }
 
 func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {

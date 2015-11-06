@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	jsondb "simplejsondb"
-	"simplejsondb/dbio"
 	"simplejsondb/core"
+	"simplejsondb/dbio"
 
 	utils "test_utils"
 )

@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"simplejsondb/dbio"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -15,8 +17,18 @@ const (
 
 	BTREE_POS_TYPE           = 0
 	BTREE_POS_ENTRIES_COUNT  = BTREE_POS_TYPE + 1
-	BTREE_POS_ENTRIES_OFFSET = 9
+	BTREE_POS_PARENT_ID      = BTREE_POS_ENTRIES_COUNT + 2
+	BTREE_POS_LEFT_SIBLING   = BTREE_POS_PARENT_ID + 2
+	BTREE_POS_RIGHT_SIBLING  = BTREE_POS_LEFT_SIBLING + 2
+	BTREE_POS_ENTRIES_OFFSET = BTREE_POS_RIGHT_SIBLING + 2
 
+	BTREE_BRANCH_MAX_ENTRIES           = 680
+	BTREE_BRANCH_ENTRY_JUMP            = 6 // 2 bytes for the left pointer and 4 bytes for the search key
+	BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID  = 0
+	BTREE_BRANCH_OFFSET_KEY            = 2
+	BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID = 6
+
+	BTREE_LEAF_MAX_ENTRIES     = 510
 	BTREE_LEAF_ENTRY_SIZE      = 8
 	BTREE_LEAF_OFFSET_KEY      = 0
 	BTREE_LEAF_OFFSET_BLOCK_ID = 4
@@ -26,6 +38,13 @@ const (
 type BTreeNode interface {
 	DataBlockID() uint16
 	IsLeaf() bool
+	IsRoot() bool
+	Parent() uint16
+	EntriesCount() uint16
+	SetParent(node BTreeNode)
+	SetLeftSibling(node BTreeNode)
+	SetRightSibling(node BTreeNode)
+	RightSibling() uint16
 }
 
 type bTreeNode struct {
@@ -40,9 +59,38 @@ func (n *bTreeNode) IsLeaf() bool {
 	return n.block.ReadUint8(BTREE_POS_TYPE) == BTREE_TYPE_LEAF
 }
 
+func (n *bTreeNode) EntriesCount() uint16 {
+	return n.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+}
+
+func (n *bTreeNode) IsRoot() bool {
+	return n.block.ReadUint16(BTREE_POS_PARENT_ID) == 0
+}
+
+func (n *bTreeNode) Parent() uint16 {
+	return n.block.ReadUint16(BTREE_POS_PARENT_ID)
+}
+
+func (n *bTreeNode) SetParent(node BTreeNode) {
+	n.block.Write(BTREE_POS_PARENT_ID, node.DataBlockID())
+}
+
+func (n *bTreeNode) SetLeftSibling(node BTreeNode) {
+	n.block.Write(BTREE_POS_LEFT_SIBLING, node.DataBlockID())
+}
+
+func (n *bTreeNode) SetRightSibling(node BTreeNode) {
+	n.block.Write(BTREE_POS_RIGHT_SIBLING, node.DataBlockID())
+}
+
+func (n *bTreeNode) RightSibling() uint16 {
+	return n.block.ReadUint16(BTREE_POS_RIGHT_SIBLING)
+}
+
 type BTreeBranch interface {
 	BTreeNode
-	Find(searchKey uint32) RowID
+	Add(searchKey uint32, leftNode, rightNode BTreeNode)
+	Find(searchKey uint32) uint16
 }
 
 type bTreeBranch struct {
@@ -55,8 +103,54 @@ func CreateBTreeBranch(block *dbio.DataBlock) BTreeBranch {
 	return &bTreeBranch{node}
 }
 
-func (n *bTreeBranch) Find(searchKey uint32) RowID {
-	return RowID{}
+func (b *bTreeBranch) Find(searchKey uint32) uint16 {
+	log.Printf("BRANCH_FIND blockid=%d, searchkey=%d", b.block.ID, searchKey)
+	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+
+	if entriesCount == 0 {
+		return 0
+	}
+
+	// XXX: Should we perform a binary search here?
+	entryToFollowKey := uint32(0)
+	entryToFollowPtr := 0
+	for i := 0; i < entriesCount; i++ {
+		initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (i * BTREE_BRANCH_ENTRY_JUMP))
+		keyFound := b.block.ReadUint32(initialOffset + BTREE_BRANCH_OFFSET_KEY)
+
+		// We have a match!
+		if keyFound >= searchKey {
+			entryToFollowKey = keyFound
+			entryToFollowPtr = initialOffset
+			break
+		}
+	}
+
+	if entryToFollowPtr == 0 {
+		return 0
+	}
+
+	if searchKey >= entryToFollowKey {
+		return b.block.ReadUint16(entryToFollowPtr + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID)
+	} else {
+		return b.block.ReadUint16(entryToFollowPtr + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID)
+	}
+}
+
+func (b *bTreeBranch) Add(searchKey uint32, leftNode, rightNode BTreeNode) {
+	log.Printf("BRANCH_ADD blockid=%d, searchkey=%d, leftid=%d, rightid=%d", b.block.ID, searchKey, leftNode.DataBlockID(), rightNode.DataBlockID())
+
+	entriesCount := b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+
+	// Since we always insert keys in order, we always append the values at the
+	// end of the node
+	initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (entriesCount * BTREE_BRANCH_ENTRY_JUMP))
+	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID, leftNode.DataBlockID())
+	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_KEY, searchKey)
+	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID, rightNode.DataBlockID())
+
+	entriesCount += 1
+	b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount))
 }
 
 type BTreeLeaf interface {
@@ -65,6 +159,7 @@ type BTreeLeaf interface {
 	Remove(searchKey uint32)
 	Find(searchKey uint32) RowID
 	All() []RowID
+	IsFull() bool
 }
 
 type bTreeLeaf struct {
@@ -79,6 +174,8 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 
 // NOTE: This assumes that search keys will be added in order
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
+	log.Printf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v", l.block.ID, searchKey, rowID)
+
 	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
 
 	// Since we always insert keys in order, we always append the record at the
@@ -93,6 +190,7 @@ func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 }
 
 func (l *bTreeLeaf) Find(searchKey uint32) RowID {
+	log.Printf("LEAF_FIND blockid=%d, searchkey=%d", l.block.ID, searchKey)
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
 	// XXX: Should we perform a binary search here?
@@ -158,4 +256,8 @@ func (l *bTreeLeaf) All() []RowID {
 		})
 	}
 	return all
+}
+
+func (n *bTreeLeaf) IsFull() bool {
+	return n.block.ReadUint16(BTREE_POS_ENTRIES_COUNT) == BTREE_LEAF_MAX_ENTRIES
 }
