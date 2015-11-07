@@ -16,8 +16,21 @@ type BTreeIndex interface {
 }
 
 type bTreeIndex struct {
-	buffer dbio.DataBuffer
-	repo   DataBlockRepository
+	buffer                             dbio.DataBuffer
+	repo                               DataBlockRepository
+	leafCapacity, halfLeafCapacity     uint16
+	branchCapacity, halfBranchCapacity uint16
+}
+
+func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockRepository, leafCapacity, branchCapacity uint16) BTreeIndex {
+	return &bTreeIndex{
+		buffer:             buffer,
+		repo:               dataBlockRepository,
+		leafCapacity:       leafCapacity,
+		halfLeafCapacity:   leafCapacity / 2,
+		branchCapacity:     branchCapacity,
+		halfBranchCapacity: branchCapacity / 2,
+	}
 }
 
 // NOTE: This assumes that search keys will be added in order
@@ -122,7 +135,7 @@ func (idx *bTreeIndex) findLeafFromBranch(branchNode BTreeBranch, searchKey uint
 }
 
 func (idx *bTreeIndex) addToBranchRoot(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32, rowID RowID) {
-	if branchNode.EntriesCount() == BTREE_BRANCH_MAX_ENTRIES {
+	if branchNode.EntriesCount() == idx.branchCapacity {
 		log.Panic("Can't split branch yet")
 		// else if root is a branch and needs a split
 		//   right := CreateBTreeBranch
@@ -181,7 +194,7 @@ func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BT
 	}
 
 	// Do we need to think about moving keys around?
-	if entriesCount >= BTREE_LEAF_MAX_ENTRIES/2 {
+	if entriesCount >= idx.halfLeafCapacity {
 		return
 	}
 
@@ -193,7 +206,7 @@ func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BT
 
 	// Can we "borrow" a key from the right sibling instead of merging?
 	entriesCount = right.EntriesCount()
-	if entriesCount > BTREE_LEAF_MAX_ENTRIES/2 {
+	if entriesCount > idx.halfLeafCapacity {
 		idx.pipeFirst(leaf, right)
 		return
 	}
@@ -238,7 +251,7 @@ func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeL
 		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
 		return
 	}
-	if !parent.IsRoot() && parent.EntriesCount() < BTREE_BRANCH_MAX_ENTRIES/2 {
+	if !parent.IsRoot() && parent.EntriesCount() < idx.branchCapacity {
 		log.Panic("Don't know how to cascade merges yet")
 	}
 }

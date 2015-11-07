@@ -1,8 +1,9 @@
-package core
+package core_test
 
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"simplejsondb/core"
 	"simplejsondb/dbio"
 
 	utils "test_utils"
@@ -33,7 +34,7 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 	assertIndexFindErrorN(t, index, 510)
 
 	// Add one record and ensure it can be removed
-	index.Add(1, RowID{RecordID: 1})
+	index.Add(1, core.RowID{RecordID: 1})
 	index.Remove(1)
 
 	// Just as a sanity check, can we add everything again after the node has been
@@ -66,8 +67,8 @@ func TestBTreeIndex_LeafRootSplitAndMergeBack(t *testing.T) {
 }
 
 func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
-	index := createTestBTreeIndex(t, BTREE_BRANCH_MAX_ENTRIES*1.15, 256)
-	totalEntries := BTREE_BRANCH_MAX_ENTRIES * BTREE_LEAF_MAX_ENTRIES
+	index := createTestBTreeIndex(t, core.BTREE_BRANCH_MAX_ENTRIES*1.15, 256)
+	totalEntries := core.BTREE_BRANCH_MAX_ENTRIES * core.BTREE_LEAF_MAX_ENTRIES
 
 	log.SetLevel(log.WarnLevel)
 	// Trigger lots of splits on leaf nodes attached to the root
@@ -101,7 +102,7 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 	assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
 }
 
-func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTreeIndex {
+func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) core.BTreeIndex {
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),
@@ -113,7 +114,7 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTr
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
-	repo := NewDataBlockRepository(dataBuffer)
+	repo := core.NewDataBlockRepository(dataBuffer)
 
 	controlBlock := repo.ControlBlock()
 	controlBlock.Format()
@@ -122,7 +123,7 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTr
 	if err != nil {
 		t.Fatal(err)
 	}
-	indexRoot := CreateBTreeLeaf(rootBlock)
+	indexRoot := core.CreateBTreeLeaf(rootBlock)
 	dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
 
 	blockMap := repo.DataBlocksMap()
@@ -130,10 +131,10 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTr
 		blockMap.MarkAsUsed(i)
 	}
 
-	return &bTreeIndex{dataBuffer, repo}
+	return core.NewBTreeIndex(dataBuffer, repo, core.BTREE_LEAF_MAX_ENTRIES, core.BTREE_BRANCH_MAX_ENTRIES)
 }
 
-func assertIndexFindErrorN(t *testing.T, index BTreeIndex, totalRecords int) {
+func assertIndexFindErrorN(t *testing.T, index core.BTreeIndex, totalRecords int) {
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i + 1)
 		rowID, err := index.Find(id)
@@ -143,8 +144,8 @@ func assertIndexFindErrorN(t *testing.T, index BTreeIndex, totalRecords int) {
 	}
 }
 
-func assertIndexCanAddAndFindN(t *testing.T, index BTreeIndex, totalRecords int) {
-	expectedRowIDs := []RowID{}
+func assertIndexCanAddAndFindN(t *testing.T, index core.BTreeIndex, totalRecords int) {
+	expectedRowIDs := []core.RowID{}
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i + 1)
 		expectedRowID := indexInsert(index, id, i)
@@ -155,7 +156,7 @@ func assertIndexCanAddAndFindN(t *testing.T, index BTreeIndex, totalRecords int)
 		}
 
 		if rowID != expectedRowID {
-			t.Fatalf("Wrong RowID found for record %d, got %+v, expected %+v", id, rowID, expectedRowID)
+			t.Fatalf("Wrong core.RowID found for record %d, got %+v, expected %+v", id, rowID, expectedRowID)
 		}
 		expectedRowIDs = append(expectedRowIDs, expectedRowID)
 	}
@@ -180,14 +181,14 @@ func assertIndexCanAddAndFindN(t *testing.T, index BTreeIndex, totalRecords int)
 	}
 }
 
-func indexInsertN(index BTreeIndex, totalRecords int) {
+func indexInsertN(index core.BTreeIndex, totalRecords int) {
 	for i := 0; i < totalRecords; i++ {
 		indexInsert(index, uint32(i+1), i)
 	}
 }
 
-func indexInsert(index BTreeIndex, id uint32, position int) RowID {
-	rowID := RowID{
+func indexInsert(index core.BTreeIndex, id uint32, position int) core.RowID {
+	rowID := core.RowID{
 		RecordID:    id,
 		DataBlockID: uint16(position % 10),
 		LocalID:     uint16(position % 100),
@@ -196,7 +197,7 @@ func indexInsert(index BTreeIndex, id uint32, position int) RowID {
 	return rowID
 }
 
-func assertIndexCanRemoveN(t *testing.T, index BTreeIndex, totalRecords int) {
+func assertIndexCanRemoveN(t *testing.T, index core.BTreeIndex, totalRecords int) {
 	totalBefore := len(index.All())
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i + 1)
@@ -208,7 +209,7 @@ func assertIndexCanRemoveN(t *testing.T, index BTreeIndex, totalRecords int) {
 	}
 }
 
-func assertIndexCanRemoveRange(t *testing.T, index BTreeIndex, firstID, lastID uint32) {
+func assertIndexCanRemoveRange(t *testing.T, index core.BTreeIndex, firstID, lastID uint32) {
 	totalBefore := len(index.All())
 	for id := firstID; id <= lastID; id++ {
 		index.Remove(id)
@@ -219,7 +220,7 @@ func assertIndexCanRemoveRange(t *testing.T, index BTreeIndex, firstID, lastID u
 	}
 }
 
-func assertIndexCanRemoveReverseRange(t *testing.T, index BTreeIndex, firstID, lastID uint32) {
+func assertIndexCanRemoveReverseRange(t *testing.T, index core.BTreeIndex, firstID, lastID uint32) {
 	totalBefore := len(index.All())
 	for id := lastID; id >= firstID; id-- {
 		index.Remove(id)
