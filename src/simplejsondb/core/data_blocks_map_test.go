@@ -58,7 +58,7 @@ func TestDataBlocksMap(t *testing.T) {
 	// Fill in the whole map
 	for i := 0; i < max; i++ {
 		dbm.MarkAsUsed(uint16(i))
-		if free := dbm.FirstFree(); free != uint16(i + 1) {
+		if free := dbm.FirstFree(); free != uint16(i+1) {
 			t.Fatalf("Something is wrong with detecting the first free block after %d was marked as being in use, got %d", i, free)
 		}
 	}

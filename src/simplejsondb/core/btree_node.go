@@ -1,8 +1,8 @@
 package core
 
 import (
-	"simplejsondb/dbio"
 	log "github.com/Sirupsen/logrus"
+	"simplejsondb/dbio"
 )
 
 type BTreeNode interface {

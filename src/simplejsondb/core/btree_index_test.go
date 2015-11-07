@@ -2,8 +2,8 @@ package core
 
 import (
 	"fmt"
-	"simplejsondb/dbio"
 	log "github.com/Sirupsen/logrus"
+	"simplejsondb/dbio"
 
 	utils "test_utils"
 	"testing"
@@ -74,7 +74,7 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 	assertIndexCanAddAndFindN(t, index, totalEntries)
 
 	// Ensure we error when an unknown record has been asked after all those splits
-	if _, err := index.Find(uint32(totalEntries*2)); err == nil {
+	if _, err := index.Find(uint32(totalEntries * 2)); err == nil {
 		t.Fatal("Did not return an error when finding a record that does not exist")
 	}
 
@@ -146,7 +146,7 @@ func assertIndexFindErrorN(t *testing.T, index BTreeIndex, totalRecords int) {
 func assertIndexCanAddAndFindN(t *testing.T, index BTreeIndex, totalRecords int) {
 	expectedRowIDs := []RowID{}
 	for i := 0; i < totalRecords; i++ {
-		id := uint32(i+1)
+		id := uint32(i + 1)
 		expectedRowID := indexInsert(index, id, i)
 
 		rowID, err := index.Find(id)
@@ -188,7 +188,7 @@ func indexInsertN(index BTreeIndex, totalRecords int) {
 
 func indexInsert(index BTreeIndex, id uint32, position int) RowID {
 	rowID := RowID{
-		RecordID: id,
+		RecordID:    id,
 		DataBlockID: uint16(position % 10),
 		LocalID:     uint16(position % 100),
 	}
@@ -203,7 +203,7 @@ func assertIndexCanRemoveN(t *testing.T, index BTreeIndex, totalRecords int) {
 		index.Remove(id)
 	}
 	totalAfter := len(index.All())
-	if totalBefore != totalAfter + totalRecords {
+	if totalBefore != totalAfter+totalRecords {
 		t.Fatal("Invalid data on index!")
 	}
 }
@@ -214,7 +214,7 @@ func assertIndexCanRemoveRange(t *testing.T, index BTreeIndex, firstID, lastID u
 		index.Remove(id)
 	}
 	totalAfter := len(index.All())
-	if totalBefore != totalAfter + int(lastID - firstID) +1 {
+	if totalBefore != totalAfter+int(lastID-firstID)+1 {
 		t.Fatal("Invalid data on index!")
 	}
 }
@@ -225,7 +225,7 @@ func assertIndexCanRemoveReverseRange(t *testing.T, index BTreeIndex, firstID, l
 		index.Remove(id)
 	}
 	totalAfter := len(index.All())
-	if totalBefore != totalAfter + int(lastID - firstID)+1 {
+	if totalBefore != totalAfter+int(lastID-firstID)+1 {
 		t.Fatalf("Invalid data on index! before=%d, after=%d, firstid=%d, lastid=%d", totalBefore, totalAfter, firstID, lastID)
 	}
 }
