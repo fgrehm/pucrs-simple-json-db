@@ -31,22 +31,6 @@ func (idx *bTreeIndex) Add(searchKey uint32, rowID RowID) {
 		branchRoot, _ := root.(BTreeBranch)
 		idx.addToBranchRoot(controlBlock, branchRoot, searchKey, rowID)
 	}
-
-	// else if root is a branch and needs a split
-	//   right := CreateBTreeBranch
-	//   root.SetRightSibling(right.DataBlockID())
-	//   right.SetLeftSibling(root.DataBlockID())
-	//   newRoot := CreateBTreeBranch
-	//   entries := root.All()
-	//   // Since we always insert keys in order, we always append the record at the
-	//   // end of the node
-	//   // TODO: Add entries[entries/2+1:] to the right
-	//   // TODO: Add entries[entries/2] to the new root
-	//   // TODO: Remove entries[entries/2:] from root (reverse the list and remove from the end)
-	//   newRoot.Add(middle.RecordID, root.DataBlockID(), right.DataBlockID())
-	//   root.SetParent(newRoot.DataBlock())
-	//   right.SetParent(newRoot.DataBlock())
-	//   controlBlock.SetRootBTreeBlock(newRoot.DataBlockID())
 }
 
 func (idx *bTreeIndex) Find(searchKey uint32) (RowID, error) {
@@ -140,6 +124,21 @@ func (idx *bTreeIndex) findLeafFromBranch(branchNode BTreeBranch, searchKey uint
 func (idx *bTreeIndex) addToBranchRoot(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32, rowID RowID) {
 	if branchNode.EntriesCount() == BTREE_BRANCH_MAX_ENTRIES {
 		log.Panic("Can't split branch yet")
+		// else if root is a branch and needs a split
+		//   right := CreateBTreeBranch
+		//   root.SetRightSibling(right.DataBlockID())
+		//   right.SetLeftSibling(root.DataBlockID())
+		//   newRoot := CreateBTreeBranch
+		//   entries := root.All()
+		//   // Since we always insert keys in order, we always append the record at the
+		//   // end of the node
+		//   // TODO: Add entries[entries/2+1:] to the right
+		//   // TODO: Add entries[entries/2] to the new root
+		//   // TODO: Remove entries[entries/2:] from root (reverse the list and remove from the end)
+		//   newRoot.Add(middle.RecordID, root.DataBlockID(), right.DataBlockID())
+		//   root.SetParent(newRoot.DataBlock())
+		//   right.SetParent(newRoot.DataBlock())
+		//   controlBlock.SetRootBTreeBlock(newRoot.DataBlockID())
 	}
 
 	leaf := idx.findLeafFromBranch(branchNode, searchKey)
