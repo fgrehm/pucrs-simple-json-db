@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"simplejsondb/dbio"
+	log "github.com/Sirupsen/logrus"
 
 	utils "test_utils"
 	"testing"
@@ -64,10 +65,11 @@ func TestBTreeIndex_LeafRootSplitAndMergeBack(t *testing.T) {
 	assertIndexCanAddAndFindN(t, index, 511)
 }
 
-func TestBTreeIndex_BranchRootSplitOnLeaves(t *testing.T) {
-	index := createTestBTreeIndex(t, BTREE_BRANCH_MAX_ENTRIES*1.15, 5)
+func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
+	index := createTestBTreeIndex(t, BTREE_BRANCH_MAX_ENTRIES*1.15, 256)
 	totalEntries := BTREE_BRANCH_MAX_ENTRIES * BTREE_LEAF_MAX_ENTRIES
 
+	log.SetLevel(log.WarnLevel)
 	// Trigger lots of splits on leaf nodes attached to the root
 	assertIndexCanAddAndFindN(t, index, totalEntries)
 
@@ -75,6 +77,28 @@ func TestBTreeIndex_BranchRootSplitOnLeaves(t *testing.T) {
 	if _, err := index.Find(uint32(totalEntries*2)); err == nil {
 		t.Fatal("Did not return an error when finding a record that does not exist")
 	}
+
+	// Remove all of the records we have just inserted (AKA merge)
+	assertIndexCanRemoveN(t, index, totalEntries)
+
+	// Ensure we can't load the records anymore
+	assertIndexFindErrorN(t, index, totalEntries)
+
+	// Just as a sanity check, can we add everything again after the node has been
+	// cleared and merged?
+	assertIndexCanAddAndFindN(t, index, totalEntries)
+
+	// What about removing chunks of keys
+	t.Fatal("THIS IS BROKEN!")
+	assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/2, uint32(totalEntries))
+	assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
+	assertIndexCanRemoveReverseRange(t, index, 511, 1020)
+	assertIndexCanRemoveRange(t, index, 1, 78)
+	// assertIndexCanFindRange(t, index, 78, 510)
+	assertIndexCanRemoveRange(t, index, 79, 510)
+	// assertIndexCanFindRange(t, index, 4000, 10000)
+	assertIndexCanRemoveRange(t, index, 1021, 4000)
+	assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
 }
 
 func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTreeIndex {
@@ -181,5 +205,27 @@ func assertIndexCanRemoveN(t *testing.T, index BTreeIndex, totalRecords int) {
 	totalAfter := len(index.All())
 	if totalBefore != totalAfter + totalRecords {
 		t.Fatal("Invalid data on index!")
+	}
+}
+
+func assertIndexCanRemoveRange(t *testing.T, index BTreeIndex, firstID, lastID uint32) {
+	totalBefore := len(index.All())
+	for id := firstID; id <= lastID; id++ {
+		index.Remove(id)
+	}
+	totalAfter := len(index.All())
+	if totalBefore != totalAfter + int(lastID - firstID) +1 {
+		t.Fatal("Invalid data on index!")
+	}
+}
+
+func assertIndexCanRemoveReverseRange(t *testing.T, index BTreeIndex, firstID, lastID uint32) {
+	totalBefore := len(index.All())
+	for id := lastID; id >= firstID; id-- {
+		index.Remove(id)
+	}
+	totalAfter := len(index.All())
+	if totalBefore != totalAfter + int(lastID - firstID)+1 {
+		t.Fatalf("Invalid data on index! before=%d, after=%d, firstid=%d, lastid=%d", totalBefore, totalAfter, firstID, lastID)
 	}
 }

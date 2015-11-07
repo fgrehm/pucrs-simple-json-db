@@ -49,10 +49,18 @@ func TestDataBlocksMap(t *testing.T) {
 		t.Errorf("Expected datablock %d to be in use", dbio.DATABLOCK_SIZE+100)
 	}
 
-	// Fill in the whole map
+	// // Clear all positions first
 	max := dbio.DATABLOCK_SIZE * 2
 	for i := 0; i < max; i++ {
+		dbm.MarkAsFree(uint16(i))
+	}
+
+	// Fill in the whole map
+	for i := 0; i < max; i++ {
 		dbm.MarkAsUsed(uint16(i))
+		if free := dbm.FirstFree(); free != uint16(i + 1) {
+			t.Fatalf("Something is wrong with detecting the first free block after %d was marked as being in use, got %d", i, free)
+		}
 	}
 	// Ensure it detects that there are no more available blocks
 	if !dbm.AllInUse() {

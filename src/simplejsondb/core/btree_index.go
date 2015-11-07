@@ -94,16 +94,10 @@ func (idx *bTreeIndex) All() []RowID {
 	controlBlock := idx.repo.ControlBlock()
 	leafID := controlBlock.FirstLeaf()
 
-	log.Printf("INDEX_ALL firstleafid=%d", leafID)
 	for leafID != 0 {
 		leaf := idx.repo.BTreeLeaf(leafID)
-		log.Printf("INDEX_ALL leafall=%+v", leaf.All())
 		entries = append(entries, leaf.All()...)
 		leafID = leaf.RightSibling()
-		log.Printf("INDEX_ALL len=%+v", len(entries))
-		if len(entries) > 3 {
-			log.Printf("INDEX_ALL last3=%+v", entries[len(entries)-3:])
-		}
 		log.Printf("INDEX_ALL nextleafid=%d", leafID)
 	}
 	return entries
@@ -112,6 +106,13 @@ func (idx *bTreeIndex) All() []RowID {
 func (idx *bTreeIndex) parent(node BTreeNode) BTreeBranch {
 	if parentID := node.Parent(); parentID != 0 {
 		return idx.repo.BTreeBranch(parentID)
+	}
+	return nil
+}
+
+func (idx *bTreeIndex) leftLeafSibling(leafNode BTreeLeaf) BTreeLeaf {
+	if leftID := leafNode.LeftSibling(); leftID != 0 {
+		return idx.repo.BTreeLeaf(leftID)
 	}
 	return nil
 }
@@ -159,7 +160,24 @@ func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BT
 		log.Panic("Don't know what to do with a branch that is not the root node")
 	}
 
-	if entriesCount == 0 && !leaf.IsRoot() {
+	if entriesCount == 0 && leaf.RightSibling() == 0 {
+		parent := idx.parent(leaf)
+		parent.Remove(searchKey)
+		idx.buffer.MarkAsDirty(parent.DataBlockID())
+
+		left := idx.leftLeafSibling(leaf)
+		left.SetRightSiblingID(0)
+		idx.buffer.MarkAsDirty(left.DataBlockID())
+
+		leaf.Reset()
+		idx.buffer.MarkAsDirty(leaf.DataBlockID())
+
+		dataBlocksMap := &dataBlocksMap{idx.buffer}
+		dataBlocksMap.MarkAsFree(leaf.DataBlockID())
+		return
+	}
+
+	if entriesCount == 0 {
 		log.Panic("Don't know what to do with a zeroed leaf yet")
 	}
 
@@ -221,17 +239,20 @@ func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeL
 		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
 		return
 	}
-	if parent.EntriesCount() < BTREE_BRANCH_MAX_ENTRIES/2 {
+	if !parent.IsRoot() && parent.EntriesCount() < BTREE_BRANCH_MAX_ENTRIES/2 {
 		log.Panic("Don't know how to cascade merges yet")
 	}
 }
 
 func (idx *bTreeIndex) pipeFirst(left, right BTreeLeaf) {
-	log.Println("INDEX_PIPE left=%d, right=%d", left.DataBlockID(), right.DataBlockID())
 	rowID := right.Shift()
 	idx.buffer.MarkAsDirty(right.DataBlockID())
+
+	log.Printf("INDEX_PIPE left=%d, right=%d, key=%d", left.DataBlockID(), right.DataBlockID(), rowID.RecordID)
+
 	left.Add(rowID.RecordID, rowID)
 	idx.buffer.MarkAsDirty(left.DataBlockID())
+
 	parent := idx.parent(left)
 	parent.ReplaceKey(rowID.RecordID, right.First().RecordID)
 	idx.buffer.MarkAsDirty(parent.DataBlockID())
