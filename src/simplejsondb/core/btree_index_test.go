@@ -1,8 +1,6 @@
 package core
 
 import (
-
-	log "github.com/Sirupsen/logrus"
 	"simplejsondb/dbio"
 
 	utils "test_utils"
@@ -94,6 +92,10 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 		}
 	}
 
+	// Add one record and ensure it can be removed
+	index.Add(1, RowID{RecordID: 1})
+	index.Remove(1)
+
 	// Just as a sanity check, can we add everything again after the node has been
 	// cleared?
 	for i := 0; i < 510; i++ {
@@ -112,7 +114,7 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 	}
 }
 
-func TestBTreeIndex_LeafSplit(t *testing.T) {
+func TestBTreeIndex_LeafRootSplit(t *testing.T) {
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),
@@ -181,7 +183,7 @@ func TestBTreeIndex_LeafSplit(t *testing.T) {
 	}
 }
 
-func TestBTreeIndex_LeafMerge(t *testing.T) {
+func TestBTreeIndex_LeafMergeToRoot(t *testing.T) {
 	blocks := [][]byte{
 		make([]byte, dbio.DATABLOCK_SIZE),
 		make([]byte, dbio.DATABLOCK_SIZE),
@@ -237,7 +239,6 @@ func TestBTreeIndex_LeafMerge(t *testing.T) {
 
 	// Just as a sanity check, can we add everything again after the node has been
 	// cleared and merged?
-	log.SetLevel(log.DebugLevel)
 	for i := 0; i < 511; i++ {
 		id := uint32(i + 1)
 		expectedRowID := RowID{RecordID: id, DataBlockID: uint16(i % 10), LocalID: uint16(i % 100)}

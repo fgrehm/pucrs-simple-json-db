@@ -9,6 +9,7 @@ type DataBlockRepository interface {
 	DataBlocksMap() DataBlocksMap
 	RecordBlock(blockID uint16) RecordBlock
 	BTreeNode(blockID uint16) BTreeNode
+	BTreeBranch(blockID uint16) BTreeBranch
 	BTreeLeaf(blockID uint16) BTreeLeaf
 }
 
@@ -39,6 +40,10 @@ func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
 	} else {
 		return &bTreeBranch{node}
 	}
+}
+
+func (r *dataBlockRepository) BTreeBranch(blockID uint16) BTreeBranch {
+	return &bTreeBranch{&bTreeNode{r.fetchBlock(blockID)}}
 }
 
 func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {

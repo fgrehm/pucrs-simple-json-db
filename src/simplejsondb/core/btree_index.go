@@ -59,7 +59,9 @@ func (idx *bTreeIndex) Find(searchKey uint32) (RowID, error) {
 		rowID = leaf.Find(searchKey)
 	} else {
 		rootBranch, _ := root.(BTreeBranch)
-		rowID = idx.findFromBranch(rootBranch, searchKey)
+		if leaf := idx.findLeafFromBranch(rootBranch, searchKey); leaf != nil {
+			rowID = leaf.Find(searchKey)
+		}
 	}
 
 	if rowID == (RowID{}) {
@@ -80,7 +82,7 @@ func (idx *bTreeIndex) Remove(searchKey uint32) {
 		idx.buffer.MarkAsDirty(leaf.DataBlockID())
 	} else {
 		rootBranch, _ := root.(BTreeBranch)
-		idx.removeFromBranch(rootBranch, searchKey)
+		idx.removeFromBranch(controlBlock, rootBranch, searchKey)
 	}
 }
 
@@ -94,55 +96,111 @@ func (idx *bTreeIndex) All() []RowID {
 	return root.All()
 }
 
-func (idx *bTreeIndex) removeFromBranch(branchNode BTreeBranch, searchKey uint32) {
-	leafCandidateID := branchNode.Find(searchKey)
-	var leaf BTreeLeaf
-	for ; leafCandidateID != 0; leafCandidateID = branchNode.Find(searchKey) {
-		leafCandidateNode := idx.repo.BTreeNode(leafCandidateID)
-		if leafCandidate, isLeaf := leafCandidateNode.(BTreeLeaf); isLeaf {
-			leaf = leafCandidate
-			break
-		} else {
-			branchNode, _ = leafCandidateNode.(BTreeBranch)
-		}
+func (idx *bTreeIndex) parent(node BTreeNode) BTreeBranch {
+	if parentID := node.Parent(); parentID != 0 {
+		return idx.repo.BTreeBranch(parentID)
 	}
-
-	leaf.Remove(searchKey)
-	idx.buffer.MarkAsDirty(leaf.DataBlockID())
-
-	shouldMerge := leaf.EntriesCount() < BTREE_LEAF_MAX_ENTRIES/2 && leaf.RightSibling() != 0
-	if shouldMerge {
-		panic("Don't know how to merge yet")
-		idx.mergeLeaf(leaf)
-		return
-	}
+	panic("Called parent on a node that has no index")
 }
 
-func (idx *bTreeIndex) mergeLeaf(leaf BTreeLeaf) {
-	parentID := leaf.Parent()
-	parent := idx.repo.BTreeNode(parentID)
-	if !parent.IsRoot() {
-		panic("Don't know how to merge a leaf into a parent that is not the root node")
+func (idx *bTreeIndex) rightLeafSibling(leafNode BTreeLeaf) BTreeLeaf {
+	if rightID := leafNode.RightSibling(); rightID != 0 {
+		return idx.repo.BTreeLeaf(rightID)
 	}
-
-	rightID := leaf.RightSibling()
-	_ = idx.repo.BTreeNode(rightID)
-
-	// Copy over all of the indexes from the right side
+	return nil
 }
 
-func (idx *bTreeIndex) findFromBranch(branchNode BTreeBranch, searchKey uint32) RowID {
+func (idx *bTreeIndex) findLeafFromBranch(branchNode BTreeBranch, searchKey uint32) BTreeLeaf {
 	leafCandidateID := branchNode.Find(searchKey)
 	for ; leafCandidateID != 0; leafCandidateID = branchNode.Find(searchKey) {
 		leafCandidate := idx.repo.BTreeNode(leafCandidateID)
 		if leaf, isLeaf := leafCandidate.(BTreeLeaf); isLeaf {
-			return leaf.Find(searchKey)
+			return leaf
 		} else {
 			branchNode, _ = leafCandidate.(BTreeBranch)
 		}
 	}
+	return nil
+}
 
-	return RowID{}
+func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32) {
+	leaf := idx.findLeafFromBranch(branchNode, searchKey)
+	leaf.Remove(searchKey)
+	idx.buffer.MarkAsDirty(leaf.DataBlockID())
+
+	entriesCount := leaf.EntriesCount()
+
+	if !branchNode.IsRoot() {
+		panic("Don't know what to do with a branch that is not the root node")
+	}
+
+	if entriesCount == 0 && !leaf.IsRoot() {
+		panic("Don't know what to do with a zeroed leaf yet")
+	}
+
+	// Do we need to think about moving keys around?
+	if entriesCount >= BTREE_LEAF_MAX_ENTRIES/2 {
+		return
+	}
+
+	// Do we have a right sibling?
+	right := idx.rightLeafSibling(leaf)
+	if right == nil {
+		return
+	}
+
+	// Can we "borrow" a key from the right sibling instead of merging?
+	entriesCount = right.EntriesCount()
+	if entriesCount > BTREE_LEAF_MAX_ENTRIES/2 {
+		idx.pipeFirst(leaf, right)
+		return
+	}
+
+	// Yes, we need to merge nodes
+	log.Printf("MERGE_LEAVES left=%d, right=%d", leaf.DataBlockID(), right.DataBlockID())
+	idx.mergeLeaves(controlBlock, leaf, right)
+}
+
+func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeLeaf) {
+	parent := idx.parent(left)
+	if !parent.IsRoot() {
+		panic("Don't know how to merge a leaf into a parent that is not the root node")
+	}
+
+	rightEntries := right.All()
+	for _, entry := range rightEntries {
+		left.Add(entry.RecordID, entry)
+	}
+	idx.buffer.MarkAsDirty(left.DataBlockID())
+
+	parent.Remove(rightEntries[0].RecordID)
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
+
+	if parent.IsRoot() && parent.EntriesCount() == 0 {
+		left.ResetPointers()
+
+		controlBlock.SetBTreeRootBlock(left.DataBlockID())
+		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
+
+		dataBlocksMap := &dataBlocksMap{idx.buffer}
+		dataBlocksMap.MarkAsFree(parent.DataBlockID())
+		dataBlocksMap.MarkAsFree(right.DataBlockID())
+		return
+	}
+	if parent.EntriesCount() < BTREE_BRANCH_MAX_ENTRIES/2 {
+		panic("Don't know how to cascade merges yet")
+	}
+}
+
+func (idx *bTreeIndex) pipeFirst(left, right BTreeLeaf) {
+	log.Println("INDEX_PIPE left=%d, right=%d", left.DataBlockID(), right.DataBlockID())
+	rowID := right.Shift()
+	idx.buffer.MarkAsDirty(right.DataBlockID())
+	left.Add(rowID.RecordID, rowID)
+	idx.buffer.MarkAsDirty(left.DataBlockID())
+	parent := idx.parent(left)
+	parent.ReplaceKey(rowID.RecordID, right.First().RecordID)
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
 }
 
 func (idx *bTreeIndex) addToLeafRoot(controlBlock ControlBlock, leafRoot BTreeLeaf, searchKey uint32, rowID RowID) {
