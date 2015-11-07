@@ -9,6 +9,7 @@ const (
 	POS_NEXT_AVAILABLE_DATABLOCK = 4
 	POS_FIRST_BLOCK_PTR          = 6
 	POS_BTREE_ROOT               = 8
+	POS_BTREE_FIRST_LEAF         = 10
 )
 
 type ControlBlock interface {
@@ -22,6 +23,7 @@ type ControlBlock interface {
 	SetNextAvailableRecordsDataBlockID(dataBlockID uint16)
 	BTreeRootBlock() uint16
 	SetBTreeRootBlock(blockID uint16)
+	FirstLeaf() uint16
 }
 
 type controlBlock struct {
@@ -41,6 +43,7 @@ func (cb *controlBlock) Format() {
 	cb.block.Write(POS_FIRST_BLOCK_PTR, uint16(3))
 	// Where the BTree index starts
 	cb.block.Write(POS_BTREE_ROOT, uint16(4))
+	cb.block.Write(POS_BTREE_FIRST_LEAF, uint16(4))
 }
 
 func (cb *controlBlock) FirstRecordDataBlock() uint16 {
@@ -49,6 +52,10 @@ func (cb *controlBlock) FirstRecordDataBlock() uint16 {
 
 func (cb *controlBlock) SetFirstRecordDataBlock(blockID uint16) {
 	cb.block.Write(POS_FIRST_BLOCK_PTR, blockID)
+}
+
+func (cb *controlBlock) FirstLeaf() uint16 {
+	return cb.block.ReadUint16(POS_BTREE_FIRST_LEAF)
 }
 
 func (cb *controlBlock) BTreeRootBlock() uint16 {

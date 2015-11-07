@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"simplejsondb/dbio"
 
 	utils "test_utils"
@@ -17,10 +18,7 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 
 	// Fill block up to its limit and ensure we can read nodes that are not
 	// completely full
-	indexInsertAndFindN(t, index, 510)
-
-	// Find all of the records we have just inserted
-	indexFindN(t, index, 510)
+	assertIndexCanAddAndFindN(t, index, 510)
 
 	// Ensure we error when the block is full but the entry does not exist
 	if _, err := index.Find(9999); err == nil {
@@ -28,10 +26,10 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 	}
 
 	// Remove all of the records we have just inserted
-	indexRemoveN(index, 510)
+	assertIndexCanRemoveN(t, index, 510)
 
 	// Ensure we can't load the records anymore
-	indexFindUnknownN(t, index, 510)
+	assertIndexFindErrorN(t, index, 510)
 
 	// Add one record and ensure it can be removed
 	index.Add(1, RowID{RecordID: 1})
@@ -39,41 +37,44 @@ func TestBTreeIndex_LeafRootNode(t *testing.T) {
 
 	// Just as a sanity check, can we add everything again after the node has been
 	// cleared?
-	indexInsertAndFindN(t, index, 510)
+	assertIndexCanAddAndFindN(t, index, 510)
 }
 
-func TestBTreeIndex_LeafRootSplit(t *testing.T) {
+func TestBTreeIndex_LeafRootSplitAndMergeBack(t *testing.T) {
 	index := createTestBTreeIndex(t, 3, 5)
 
 	// Fill block up to its limit plus one and ensure we can read RowIDs back from
 	// the index
-	indexInsertAndFindN(t, index, 511)
-
-	// Find all of the records we have just inserted
-	indexFindN(t, index, 511)
+	assertIndexCanAddAndFindN(t, index, 511)
 
 	// Ensure we error when the leaf root node have been split and an unknown
 	// record has been asked
 	if _, err := index.Find(9999); err == nil {
 		t.Fatal("Did not return an error when finding a record that does not exist")
 	}
-}
-
-func TestBTreeIndex_LeafMergeToRoot(t *testing.T) {
-	index := createTestBTreeIndex(t, 3, 5)
-
-	// Fill block up to its limit plus one
-	indexInsertN(index, 511)
 
 	// Remove all of the records we have just inserted (AKA merge)
-	indexRemoveN(index, 511)
+	assertIndexCanRemoveN(t, index, 511)
 
 	// Ensure we can't load the records anymore
-	indexFindUnknownN(t, index, 511)
+	assertIndexFindErrorN(t, index, 511)
 
 	// Just as a sanity check, can we add everything again after the node has been
 	// cleared and merged?
-	indexInsertAndFindN(t, index, 511)
+	assertIndexCanAddAndFindN(t, index, 511)
+}
+
+func TestBTreeIndex_BranchRootSplitOnLeaves(t *testing.T) {
+	index := createTestBTreeIndex(t, BTREE_BRANCH_MAX_ENTRIES*1.15, 5)
+	totalEntries := BTREE_BRANCH_MAX_ENTRIES * BTREE_LEAF_MAX_ENTRIES
+
+	// Trigger lots of splits on leaf nodes attached to the root
+	assertIndexCanAddAndFindN(t, index, totalEntries)
+
+	// Ensure we error when an unknown record has been asked after all those splits
+	if _, err := index.Find(uint32(totalEntries*2)); err == nil {
+		t.Fatal("Did not return an error when finding a record that does not exist")
+	}
 }
 
 func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTreeIndex {
@@ -108,22 +109,7 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames int) BTr
 	return &bTreeIndex{dataBuffer, repo}
 }
 
-func indexFindN(t *testing.T, index BTreeIndex, totalRecords int) {
-	for i := 0; i < totalRecords; i++ {
-		id := uint32(i + 1)
-		rowID, err := index.Find(id)
-		if err != nil {
-			t.Fatalf("Error while fetching %d: %s", id, err)
-		}
-		expectedRowID := RowID{RecordID: id, DataBlockID: uint16(i % 10), LocalID: uint16(i % 100)}
-
-		if rowID != expectedRowID {
-			t.Fatalf("Wrong RowID found for record %d, got %+v, expected %+v", id, rowID, expectedRowID)
-		}
-	}
-}
-
-func indexFindUnknownN(t *testing.T, index BTreeIndex, totalRecords int) {
+func assertIndexFindErrorN(t *testing.T, index BTreeIndex, totalRecords int) {
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i + 1)
 		rowID, err := index.Find(id)
@@ -133,41 +119,67 @@ func indexFindUnknownN(t *testing.T, index BTreeIndex, totalRecords int) {
 	}
 }
 
-func indexInsertAndFindN(t *testing.T, index BTreeIndex, totalRecords int) {
+func assertIndexCanAddAndFindN(t *testing.T, index BTreeIndex, totalRecords int) {
+	expectedRowIDs := []RowID{}
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i+1)
-		expectedRowID := indexInsert(index, id, uint16(i))
+		expectedRowID := indexInsert(index, id, i)
 
 		rowID, err := index.Find(id)
 		if err != nil {
-			t.Fatalf("Error while fetching %d: %s", id, err)
+			panic(fmt.Sprintf("Error while fetching %d: %s", id, err))
 		}
 
 		if rowID != expectedRowID {
 			t.Fatalf("Wrong RowID found for record %d, got %+v, expected %+v", id, rowID, expectedRowID)
+		}
+		expectedRowIDs = append(expectedRowIDs, expectedRowID)
+	}
+	allRowIDs := index.All()
+	// if totalRecords < 1000 {
+	// 	for i := 0; i < len(allRowIDs); i++ {
+	// 		fmt.Printf("%d - %+v => ", i, allRowIDs[i])
+	// 		if i < len(expectedRowIDs) {
+	// 			fmt.Printf("%+v\n", expectedRowIDs[i])
+	// 		} else {
+	// 			fmt.Printf("NOT FOUND ON EXPECTED\n")
+	// 		}
+	// 	}
+	// }
+	if len(expectedRowIDs) != len(allRowIDs) {
+		t.Fatal("Invalid set of row IDs returned by the index")
+	}
+	for i := 0; i < len(allRowIDs); i++ {
+		if expectedRowIDs[i] != allRowIDs[i] {
+			t.Fatalf("Found a difference on the list of row ids returned by the index at %i, got %+v, expected %+v", i, allRowIDs[i], expectedRowIDs[i])
 		}
 	}
 }
 
 func indexInsertN(index BTreeIndex, totalRecords int) {
 	for i := 0; i < totalRecords; i++ {
-		indexInsert(index, uint32(i+1), uint16(i))
+		indexInsert(index, uint32(i+1), i)
 	}
 }
 
-func indexInsert(index BTreeIndex, id uint32, position uint16) RowID {
+func indexInsert(index BTreeIndex, id uint32, position int) RowID {
 	rowID := RowID{
 		RecordID: id,
-		DataBlockID: position % 10,
-		LocalID:     position % 100,
+		DataBlockID: uint16(position % 10),
+		LocalID:     uint16(position % 100),
 	}
 	index.Add(id, rowID)
 	return rowID
 }
 
-func indexRemoveN(index BTreeIndex, totalRecords int) {
+func assertIndexCanRemoveN(t *testing.T, index BTreeIndex, totalRecords int) {
+	totalBefore := len(index.All())
 	for i := 0; i < totalRecords; i++ {
 		id := uint32(i + 1)
 		index.Remove(id)
+	}
+	totalAfter := len(index.All())
+	if totalBefore != totalAfter + totalRecords {
+		t.Fatal("Invalid data on index!")
 	}
 }

@@ -41,8 +41,9 @@ type BTreeNode interface {
 	IsRoot() bool
 	Parent() uint16
 	EntriesCount() uint16
-	ResetPointers()
+	Reset()
 	SetParent(node BTreeNode)
+	SetParentID(parentID uint16)
 	SetLeftSibling(node BTreeNode)
 	SetRightSibling(node BTreeNode)
 	RightSibling() uint16
@@ -69,7 +70,11 @@ func (n *bTreeNode) IsRoot() bool {
 }
 
 func (n *bTreeNode) SetParent(node BTreeNode) {
-	n.block.Write(BTREE_POS_PARENT_ID, node.DataBlockID())
+	n.SetParentID(node.DataBlockID())
+}
+
+func (n *bTreeNode) SetParentID(parent uint16) {
+	n.block.Write(BTREE_POS_PARENT_ID, parent)
 }
 
 func (n *bTreeNode) Parent() uint16 {
@@ -88,7 +93,9 @@ func (n *bTreeNode) RightSibling() uint16 {
 	return n.block.ReadUint16(BTREE_POS_RIGHT_SIBLING)
 }
 
-func (n *bTreeNode) ResetPointers() {
+func (n *bTreeNode) Reset() {
+	log.Printf("RESET blockid=%d", n.block.ID)
+	n.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(0))
 	n.block.Write(BTREE_POS_PARENT_ID, uint16(0))
 	n.block.Write(BTREE_POS_LEFT_SIBLING, uint16(0))
 	n.block.Write(BTREE_POS_RIGHT_SIBLING, uint16(0))
@@ -106,6 +113,12 @@ type bTreeBranch struct {
 	*bTreeNode
 }
 
+type bTreeBranchEntry struct {
+	searchKey uint32
+	gteBlockID uint16
+	ltBlockID uint16
+}
+
 func CreateBTreeBranch(block *dbio.DataBlock) BTreeBranch {
 	block.Write(BTREE_POS_TYPE, BTREE_TYPE_BRANCH)
 	node := &bTreeNode{block}
@@ -120,23 +133,31 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 		return 0
 	}
 
+	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
+		return lastEntry.gteBlockID
+	}
+
+	if firstEntry := b.firstEntry(); searchKey < firstEntry.searchKey {
+		return firstEntry.ltBlockID
+	}
+
 	// XXX: Should we perform a binary search here?
 	entryToFollowKey := uint32(0)
 	entryToFollowPtr := 0
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + BTREE_BRANCH_ENTRY_JUMP
 	for i := 0; i < entriesCount; i++ {
-		initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (i * BTREE_BRANCH_ENTRY_JUMP))
-		keyFound := b.block.ReadUint32(initialOffset + BTREE_BRANCH_OFFSET_KEY)
-
+		keyFound := b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY)
 		// We have a match!
 		if keyFound >= searchKey {
 			entryToFollowKey = keyFound
-			entryToFollowPtr = initialOffset
+			entryToFollowPtr = offset
 			break
 		}
+		offset += BTREE_BRANCH_ENTRY_JUMP
 	}
 
 	if entryToFollowPtr == 0 {
-		return 0
+		panic("Something weird happened and an entry could not be found for a branch that is not empty")
 	}
 
 	if searchKey >= entryToFollowKey {
@@ -167,9 +188,9 @@ func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 }
 
 func (b *bTreeBranch) Remove(searchKey uint32) {
-	log.Printf("BRANCH_REMOVE blockid=%d, searchkey=%d", b.block.ID, searchKey)
-
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+
+	log.Printf("BRANCH_REMOVE blockid=%d, searchkey=%d, entriescount=%d", b.block.ID, searchKey, entriesCount)
 
 	// If there is only one entry on the node, just update the counter
 	if entriesCount == 1 {
@@ -214,6 +235,25 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 	}
 }
 
+func (b *bTreeBranch) firstEntry() bTreeBranchEntry {
+	offset := int(BTREE_POS_ENTRIES_OFFSET)
+	return bTreeBranchEntry{
+		searchKey: b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
+		ltBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
+		gteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
+	}
+}
+
+func (b *bTreeBranch) lastEntry() bTreeBranchEntry {
+	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + (entriesCount-1) * BTREE_BRANCH_ENTRY_JUMP
+	return bTreeBranchEntry{
+		searchKey: b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
+		ltBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
+		gteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
+	}
+}
+
 type BTreeLeaf interface {
 	BTreeNode
 	Add(searchKey uint32, rowID RowID)
@@ -237,19 +277,20 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 
 // NOTE: This assumes that search keys will be added in order
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
-	log.Printf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v", l.block.ID, searchKey, rowID)
-
 	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+
+	log.Printf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v, entriescount=%d", l.block.ID, searchKey, rowID, entriesCount)
+	log.Printf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v, entriescount=%d", l.block.ID, searchKey, rowID, entriesCount+1)
 
 	// Since we always insert keys in order, we always append the record at the
 	// end of the node
-	initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (entriesCount * BTREE_LEAF_ENTRY_SIZE))
+	initialOffset := int(BTREE_POS_ENTRIES_OFFSET) + int(entriesCount) * int(BTREE_LEAF_ENTRY_SIZE)
 	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_KEY, searchKey)
 	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_BLOCK_ID, rowID.DataBlockID)
 	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_LOCAL_ID, rowID.LocalID)
 
 	entriesCount += 1
-	l.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount))
+	l.block.Write(BTREE_POS_ENTRIES_COUNT, entriesCount)
 }
 
 func (l *bTreeLeaf) Find(searchKey uint32) RowID {
@@ -273,9 +314,9 @@ func (l *bTreeLeaf) Find(searchKey uint32) RowID {
 }
 
 func (l *bTreeLeaf) Remove(searchKey uint32) {
-	log.Printf("LEAF_REMOVE blockid=%d, searchkey=%d", l.block.ID, searchKey)
-
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+
+	log.Printf("LEAF_REMOVE blockid=%d, searchkey=%d, entriescount=%d", l.block.ID, searchKey, entriesCount)
 
 	// XXX: Should we perform a binary search here?
 	entryPtrToRemove := -1
@@ -283,6 +324,7 @@ func (l *bTreeLeaf) Remove(searchKey uint32) {
 	for i := 0; i < entriesCount; i++ {
 		ptr := int(BTREE_POS_ENTRIES_OFFSET) + int(i*BTREE_LEAF_ENTRY_SIZE)
 		keyFound := l.block.ReadUint32(ptr + BTREE_LEAF_OFFSET_KEY)
+		log.Printf("LEAF_REMOVE_KEY %d", l.block.ID, keyFound)
 		if keyFound == searchKey {
 			entryPtrToRemove = ptr
 			entryPosition = i
