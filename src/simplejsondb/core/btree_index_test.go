@@ -91,54 +91,10 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 	assertIndexCanRemoveReverseRange(t, index, uint32(1), uint32(totalEntries))
 
 	// What about removing chunks of keys
-	// assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/4, uint32(totalEntries)/2)
-	// assertIndexCanFindRange(t, index, 1, uint32(totalEntries)/4-1)
-	// assertIndexCanFindRange(t, index, uint32(totalEntries)/2+1, uint32(totalEntries))
-	// log.SetLevel(log.WarnLevel)
-	// assertIndexCanFindRange(t, index, uint33(totalEntries)/2-1, uint32(totalEntries))
-	// assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
-	// assertIndexCanRemoveReverseRange(t, index, 511, 1020)
-	// assertIndexCanRemoveRange(t, index, 79, 510)
-	// // assertIndexCanFindRange(t, index, 4000, 10000)
-	// assertIndexCanRemoveRange(t, index, 1021, 4000)
-	// assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
-}
-
-func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack2(t *testing.T) {
-	t.Fatal("TODO: Try this again after the bug has been fixed")
-	// index := createTestBTreeIndex(t, core.BTREE_BRANCH_MAX_ENTRIES*1.15, 256)
-	// totalEntries := core.BTREE_BRANCH_MAX_ENTRIES * core.BTREE_LEAF_MAX_ENTRIES
-
-	// log.SetLevel(log.WarnLevel)
-	// // Trigger lots of splits on leaf nodes attached to the root
-	// assertIndexCanAddAndFindN(t, index, totalEntries)
-
-	// // Ensure we error when an unknown record has been asked after all those splits
-	// if _, err := index.Find(uint32(totalEntries * 2)); err == nil {
-	// 	t.Fatal("Did not return an error when finding a record that does not exist")
-	// }
-
-	// // Remove all of the records we have just inserted (AKA merge)
-	// assertIndexCanRemoveN(t, index, totalEntries)
-
-	// // Ensure we can't load the records anymore
-	// assertIndexFindErrorN(t, index, totalEntries)
-
-	// // Just as a sanity check, can we add everything again after the node has been
-	// // cleared and merged?
-	// assertIndexCanAddAndFindN(t, index, totalEntries)
-
-	// // What about removing chunks of keys
-	// t.Fatal("THIS IS BROKEN!")
-	// assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/2, uint32(totalEntries))
-	// assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
-	// assertIndexCanRemoveReverseRange(t, index, 511, 1020)
-	// assertIndexCanRemoveRange(t, index, 1, 78)
-	// // assertIndexCanFindRange(t, index, 78, 510)
-	// assertIndexCanRemoveRange(t, index, 79, 510)
-	// // assertIndexCanFindRange(t, index, 4000, 10000)
-	// assertIndexCanRemoveRange(t, index, 1021, 4000)
-	// assertIndexCanRemoveReverseRange(t, index, 4001, uint32(totalEntries)/2-1)
+	assertIndexCanAddAndFindN(t, index, totalEntries)
+	assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/4, uint32(totalEntries)/2)
+	assertIndexCanFindRange(t, index, 1, uint32(totalEntries)/4-1)
+	assertIndexCanFindRange(t, index, uint32(totalEntries)/2+1, uint32(totalEntries))
 }
 
 func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity, leafCapacity int) core.BTreeIndex {

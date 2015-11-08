@@ -78,7 +78,7 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 	}
 
 	if searchKey == entryToFollowKey {
-		log.Infof("IDX_BRANCH_FIND_FOUND searchkey >= entryKey=%+v", entryToFollowKey)
+		log.Infof("IDX_BRANCH_FIND_FOUND searchkey == entryKey=%+v", entryToFollowKey)
 		return b.block.ReadUint16(entryToFollowPtr + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID)
 	} else {
 		log.Infof("IDX_BRANCH_FIND_FOUND searchkey < entryKey=%+v", entryToFollowKey)
@@ -162,35 +162,42 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 
 	// XXX: Should we perform a binary search here?
 	entryToRemovePtr := 0
-	for i := 0; i < entriesCount; i++ {
-		initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (i * BTREE_BRANCH_ENTRY_JUMP))
-		keyFound := b.block.ReadUint32(initialOffset + BTREE_BRANCH_OFFSET_KEY)
+	entryToRemoveKey := uint32(0)
+	offset := BTREE_POS_ENTRIES_OFFSET
+	for i := 0; i < entriesCount-1; i++ {
+		keyFound := b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY)
 		log.Infof("IDX_BRANCH_KEY_FOUND keyFound=%+v", keyFound)
 
 		// We have a match!
-		if searchKey >= keyFound {
-			entryToRemovePtr = initialOffset
-			log.Infof("IDX_BRANCH_REMOVE keyfound=%d, searchkey=%d, position=%d, ptr=%d", keyFound, searchKey, i, entryToRemovePtr)
+		if keyFound >= searchKey {
+			entryToRemovePtr = offset
+			entryToRemoveKey = keyFound
+			log.Infof("IDX_BRANCH_REMOVE keyFound=%d, searchKey=%d, position=%d, ptr=%d", keyFound, searchKey, i, entryToRemovePtr)
 			break
 		}
+		offset += BTREE_BRANCH_ENTRY_JUMP
 	}
 
 	if entryToRemovePtr == 0 {
 		panic(fmt.Sprintf("Unable to remove an entry with the key %d", searchKey))
 	}
 
-	if entryToRemovePtr == -1 {
-		panic(fmt.Sprintf("Tried to remove an entry that does not exist on the index: %d", searchKey))
-	}
-
 	// Write back the amount of entries on this block
 	b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount-1))
 
-	// Keep the lower than pointer around
-	entryToRemovePtr += BTREE_BRANCH_OFFSET_KEY
+	if entryToRemoveKey == searchKey {
+		// Keep the lower than pointer around
+		entryToRemovePtr += BTREE_BRANCH_OFFSET_KEY
+	} else {
+		// Keep the lower than pointer around
+		entryToRemovePtr -= BTREE_BRANCH_ENTRY_JUMP
+		entryToRemovePtr += BTREE_BRANCH_OFFSET_KEY
+	}
+
+	log.Infof("IDX_BRANCH_REMOVE_FIRST_PTR ptr=%d", entryToRemovePtr)
 
 	// Copy data over
-	lastByteToOverwrite := int(BTREE_POS_ENTRIES_OFFSET) + (entriesCount-1)*BTREE_BRANCH_ENTRY_JUMP
+	lastByteToOverwrite := int(BTREE_POS_ENTRIES_OFFSET) + entriesCount*BTREE_BRANCH_ENTRY_JUMP
 	for i := entryToRemovePtr; i < lastByteToOverwrite; i++ {
 		b.block.Data[i] = b.block.Data[i+BTREE_BRANCH_ENTRY_JUMP]
 	}
