@@ -39,7 +39,7 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
 
-	log.Printf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v, entriescount=%d", l.block.ID, searchKey, rowID, entriesCount)
+	log.Debugf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v, entriescount=%d", l.block.ID, searchKey, rowID, entriesCount)
 
 	// Since we always insert keys in order, we always append the record at the
 	// end of the node
@@ -53,7 +53,7 @@ func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 }
 
 func (l *bTreeLeaf) Find(searchKey uint32) RowID {
-	log.Printf("LEAF_FIND blockid=%d, searchkey=%d", l.block.ID, searchKey)
+	log.Debugf("LEAF_FIND blockid=%d, searchkey=%d", l.block.ID, searchKey)
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
 	// XXX: Should we perform a binary search here?
@@ -75,7 +75,7 @@ func (l *bTreeLeaf) Find(searchKey uint32) RowID {
 func (l *bTreeLeaf) Remove(searchKey uint32) {
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
-	log.Printf("LEAF_REMOVE blockid=%d, searchkey=%d, entriescount=%d", l.block.ID, searchKey, entriesCount)
+	log.Debugf("LEAF_REMOVE blockid=%d, searchkey=%d, entriescount=%d", l.block.ID, searchKey, entriesCount)
 
 	// TODO: Shortcut remove on last entry
 
@@ -87,7 +87,7 @@ func (l *bTreeLeaf) Remove(searchKey uint32) {
 		keyFound := l.block.ReadUint32(ptr + BTREE_LEAF_OFFSET_KEY)
 		log.Debugf("LEAF_REMOVE_KEY_CANDIDATE block=%d, key=%d, ptr=%d", l.block.ID, keyFound, ptr)
 		if keyFound == searchKey {
-			log.Printf("LEAF_REMOVE_KEY block=%d, key=%d, ptr=%d", l.block.ID, keyFound, ptr)
+			log.Debugf("LEAF_REMOVE_KEY block=%d, key=%d, ptr=%d", l.block.ID, keyFound, ptr)
 			entryPtrToRemove = ptr
 			entryPosition = i
 			break

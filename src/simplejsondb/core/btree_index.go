@@ -2,9 +2,7 @@ package core
 
 import (
 	"fmt"
-
 	"simplejsondb/dbio"
-
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -18,11 +16,11 @@ type BTreeIndex interface {
 type bTreeIndex struct {
 	buffer                             dbio.DataBuffer
 	repo                               DataBlockRepository
-	leafCapacity, halfLeafCapacity     uint16
-	branchCapacity, halfBranchCapacity uint16
+	leafCapacity, halfLeafCapacity     int
+	branchCapacity, halfBranchCapacity int
 }
 
-func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockRepository, leafCapacity, branchCapacity uint16) BTreeIndex {
+func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockRepository, leafCapacity, branchCapacity int) BTreeIndex {
 	return &bTreeIndex{
 		buffer:             buffer,
 		repo:               dataBlockRepository,
@@ -33,41 +31,47 @@ func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockReposito
 	}
 }
 
-// NOTE: This assumes that search keys will be added in order
 func (idx *bTreeIndex) Add(searchKey uint32, rowID RowID) {
 	controlBlock := idx.repo.ControlBlock()
 	root := idx.repo.BTreeNode(controlBlock.BTreeRootBlock())
+	log.Printf("==IDX_ADD_BEGIN rootBlockID=%d, searchKey=%d, rowID=%+v", root.DataBlockID(), searchKey, rowID)
 
 	if leafRoot, isLeaf := root.(BTreeLeaf); isLeaf {
 		idx.addToLeaf(controlBlock, leafRoot, searchKey, rowID)
 	} else {
 		branchRoot, _ := root.(BTreeBranch)
-		idx.addToBranchRoot(controlBlock, branchRoot, searchKey, rowID)
+		idx.addToBranch(controlBlock, branchRoot, searchKey, rowID)
 	}
+	log.Printf("==IDX_ADD_END searchKey=%d", searchKey)
 }
 
 func (idx *bTreeIndex) Find(searchKey uint32) (RowID, error) {
 	controlBlock := idx.repo.ControlBlock()
 	root := idx.repo.BTreeNode(controlBlock.BTreeRootBlock())
-	var rowID RowID
+	log.Printf("==IDX_FIND_BEGIN rootBlockID=%d, searchKey=%d", root.DataBlockID(), searchKey)
 
-	log.Printf("INDEX_FIND rootblockid=%d, searchkey=%d", root.DataBlockID(), searchKey)
-
-	if leaf, isLeaf := root.(BTreeLeaf); isLeaf {
-		log.Printf("LEAF rootblockid=%d, searchkey=%d", root.DataBlockID(), searchKey)
-		rowID = leaf.Find(searchKey)
+	var (
+		rowID RowID
+		leaf  BTreeLeaf
+	)
+	if branchRoot, isBranch := root.(BTreeBranch); isBranch {
+		log.Printf("IDX_FIND_ON_BRANCH blockID=%d", branchRoot.DataBlockID())
+		leaf = idx.findLeafFromBranch(branchRoot, searchKey)
 	} else {
-		log.Printf("BRANCH rootblockid=%d, searchkey=%d", root.DataBlockID(), searchKey)
-		rootBranch, _ := root.(BTreeBranch)
-		if leaf := idx.findLeafFromBranch(rootBranch, searchKey); leaf != nil {
-			rowID = leaf.Find(searchKey)
-		}
+		leaf, _ = root.(BTreeLeaf)
+	}
+
+	if leaf != nil {
+		log.Printf("IDX_FIND_ON_LEAF_ROOT blockID=%d", leaf.DataBlockID())
+		rowID = leaf.Find(searchKey)
 	}
 
 	if rowID == (RowID{}) {
-		return rowID, fmt.Errorf("Search key not found: %d", searchKey)
+		log.Printf("==IDX_FIND_END searchKey=%d NOT FOUND", searchKey)
+		return rowID, fmt.Errorf("Not found: %d", searchKey)
 	}
 
+	log.Printf("==IDX_FIND_END searchKey=%d, rowID=%+v", searchKey, rowID)
 	return rowID, nil
 }
 
@@ -75,15 +79,18 @@ func (idx *bTreeIndex) Remove(searchKey uint32) {
 	controlBlock := idx.repo.ControlBlock()
 	root := idx.repo.BTreeNode(controlBlock.BTreeRootBlock())
 
-	log.Printf("INDEX_REMOVE rootblockid=%d, searchkey=%d", root.DataBlockID(), searchKey)
+	log.Printf("==IDX_REMOVE_BEGIN rootBlockID=%d, searchKey=%d", root.DataBlockID(), searchKey)
 
 	if leaf, isLeaf := root.(BTreeLeaf); isLeaf {
+		log.Printf("IDX_REMOVE_FROM_LEAF_ROOT blockID=%d, searchKey=%d", root.DataBlockID(), searchKey)
 		leaf.Remove(searchKey)
 		idx.buffer.MarkAsDirty(leaf.DataBlockID())
 	} else {
-		rootBranch, _ := root.(BTreeBranch)
-		idx.removeFromBranch(controlBlock, rootBranch, searchKey)
+		log.Printf("IDX_REMOVE_FROM_BRANCH_ROOT blockID=%d, searchKey=%d", root.DataBlockID(), searchKey)
+		branchRoot, _ := root.(BTreeBranch)
+		idx.removeFromBranch(controlBlock, branchRoot, searchKey)
 	}
+	log.Printf("==IDX_REMOVE_END searchKey=%d", searchKey)
 }
 
 func (idx *bTreeIndex) All() []RowID {
@@ -91,14 +98,227 @@ func (idx *bTreeIndex) All() []RowID {
 	controlBlock := idx.repo.ControlBlock()
 	leafID := controlBlock.FirstLeaf()
 
+	log.Printf("==IDX_ALL_BEGIN firstLeafID=%d", leafID)
 	for leafID != 0 {
 		leaf := idx.repo.BTreeLeaf(leafID)
 		entries = append(entries, leaf.All()...)
 		leafID = leaf.RightSibling()
-		log.Printf("INDEX_ALL nextleafid=%d", leafID)
+		log.Printf("IDX_ALL_NEXT leafID=%d", leafID)
 	}
+	log.Printf("==IDX_ALL_END totalEntries=%d", len(entries))
 	return entries
 }
+
+// Node manipulation ==========================================================
+
+func (idx *bTreeIndex) addToBranch(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32, rowID RowID) {
+	leaf := idx.findLeafFromBranch(branchNode, searchKey)
+	if leaf == nil {
+		log.Fatalf("Don't know where to insert %d", searchKey)
+	}
+
+	if branchNode.EntriesCount() == uint16(idx.branchCapacity) {
+		if leaf.EntriesCount() == uint16(idx.leafCapacity) {
+			panic("Can't split branch yet")
+		}
+		//   right := CreateBTreeBranch
+		//   root.SetRightSibling(right.DataBlockID())
+		//   right.SetLeftSibling(root.DataBlockID())
+		//   newRoot := CreateBTreeBranch
+		//   entries := root.All()
+		//   // Since we always insert keys in order, we always append the record at the
+		//   // end of the node
+		//   // TODO: Add entries[entries/2+1:] to the right
+		//   // TODO: Add entries[entries/2] to the new root
+		//   // TODO: Remove entries[entries/2:] from root (reverse the list and remove from the end)
+		//   newRoot.Add(middle.RecordID, root.DataBlockID(), right.DataBlockID())
+		//   root.SetParent(newRoot.DataBlock())
+		//   right.SetParent(newRoot.DataBlock())
+		//   controlBlock.SetRootBTreeBlock(newRoot.DataBlockID())
+	}
+
+	idx.addToLeaf(controlBlock, leaf, searchKey, rowID)
+}
+
+func (idx *bTreeIndex) addToLeaf(controlBlock ControlBlock, leaf BTreeLeaf, searchKey uint32, rowID RowID) {
+	if leaf.EntriesCount() == uint16(idx.leafCapacity) {
+		idx.handleLeafSplit(controlBlock, leaf, searchKey, rowID)
+	} else {
+		log.Printf("IDX_ADD_TO_LEAF blockID=%d", leaf.DataBlockID())
+		leaf.Add(searchKey, rowID)
+		idx.buffer.MarkAsDirty(leaf.DataBlockID())
+	}
+}
+
+func (idx *bTreeIndex) handleLeafSplit(controlBlock ControlBlock, leaf BTreeLeaf, searchKey uint32, rowID RowID) {
+	log.Printf("IDX_LEAF_SPLIT blockID=%d, searchKey=%d", leaf.DataBlockID(), searchKey)
+	blocksMap := &dataBlocksMap{idx.buffer}
+
+	right := CreateBTreeLeaf(idx.allocateBlock(blocksMap))
+	log.Printf("IDX_LEAF_SPLIT_NEW_LEAF newBlockID=%d", right.DataBlockID())
+	right.Add(searchKey, rowID)
+	idx.buffer.MarkAsDirty(right.DataBlockID())
+
+	parent := idx.parent(leaf)
+	if parent == nil { // AKA split on root node
+		parent = CreateBTreeBranch(idx.allocateBlock(blocksMap))
+		log.Printf("IDX_SET_ROOT blockID=%d", parent.DataBlockID())
+		controlBlock.SetBTreeRootBlock(parent.DataBlockID())
+		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
+	}
+
+	log.Printf("IDX_LEAF_ALLOC leftID=%d, parentID=%d, rightID=%d", leaf.DataBlockID(), parent.DataBlockID(), right.DataBlockID())
+
+	// Add entry to the internal branch node
+	parent.Add(searchKey, leaf, right)
+
+	// Update sibling pointers
+	right.SetLeftSibling(leaf)
+	leaf.SetRightSibling(right)
+
+	// Set parent node pointers
+	right.SetParent(parent)
+	leaf.SetParent(parent)
+
+	// Let data be persisted
+	idx.buffer.MarkAsDirty(right.DataBlockID())
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
+	idx.buffer.MarkAsDirty(leaf.DataBlockID())
+}
+
+func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32) {
+	leaf := idx.findLeafFromBranch(branchNode, searchKey)
+	leaf.Remove(searchKey)
+	idx.buffer.MarkAsDirty(leaf.DataBlockID())
+
+	if !branchNode.IsRoot() {
+		panic("Don't know what to do with a branch that is not the root node")
+	}
+
+	entriesCount := leaf.EntriesCount()
+	log.Printf("IDX_REMOVE_FROM_LEAF blockID=%d, searchKey=%d, entriesCount=%d", leaf.DataBlockID(), searchKey, entriesCount)
+
+	// Did we get to the right most leaf?
+	right := idx.rightLeafSibling(leaf)
+	if right == nil {
+		idx.handleRemoveOnRightMostLeaf(searchKey, leaf)
+		return
+	}
+
+	// Do we need to worry about moving keys around?
+	if entriesCount >= uint16(idx.halfLeafCapacity) {
+		return
+	}
+
+	// Can we "borrow" a key from the right sibling instead of merging?
+	rightNodeEntriesCount := right.EntriesCount()
+	if rightNodeEntriesCount > uint16(idx.halfLeafCapacity) {
+		idx.pipeFirst(leaf, right)
+		return
+	}
+
+	// Yes, we need to merge nodes
+	log.Printf("IDX_MERGE_LEAVES left=%d, right=%d", leaf.DataBlockID(), right.DataBlockID())
+	idx.mergeLeaves(controlBlock, leaf, right)
+}
+
+func (idx *bTreeIndex) pipeFirst(left, right BTreeLeaf) {
+	rowID := right.Shift()
+	idx.buffer.MarkAsDirty(right.DataBlockID())
+
+	log.Printf("IDX_PIPE key=%d, from=%d, to=%d", rowID.RecordID, right.DataBlockID(), left.DataBlockID())
+
+	left.Add(rowID.RecordID, rowID)
+	idx.buffer.MarkAsDirty(left.DataBlockID())
+
+	parent := idx.parent(left)
+	parent.ReplaceKey(rowID.RecordID, right.First().RecordID)
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
+}
+
+func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeLeaf) {
+	parent := idx.parent(left)
+	if !parent.IsRoot() {
+		panic("Don't know how to merge a leaf into a parent that is not the root node")
+	}
+
+	rightEntries := right.All()
+	for _, entry := range rightEntries {
+		left.Add(entry.RecordID, entry)
+	}
+	idx.buffer.MarkAsDirty(left.DataBlockID())
+
+	if newRight := idx.rightLeafSibling(right); newRight != nil {
+		log.Printf("IDX_MERGE_LEAVES_REMOVE_GAP left=%d, right=%d, newRight=%d", left.DataBlockID(), right.DataBlockID(), newRight.DataBlockID())
+		left.SetRightSibling(newRight)
+		newRight.SetLeftSibling(left)
+		idx.buffer.MarkAsDirty(newRight.DataBlockID())
+	}
+
+	right.Reset()
+	dataBlocksMap := &dataBlocksMap{idx.buffer}
+	dataBlocksMap.MarkAsFree(right.DataBlockID())
+	idx.buffer.MarkAsDirty(right.DataBlockID())
+
+	parent.Remove(rightEntries[0].RecordID)
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
+
+	if parent.IsRoot() && parent.EntriesCount() == 0 {
+		log.Printf("IDX_MERGE_LEAVES_SET_ROOT blockID=%d", left.DataBlockID())
+
+		parent.Reset()
+		dataBlocksMap.MarkAsFree(parent.DataBlockID())
+
+		left.SetParentID(0)
+		left.SetRightSiblingID(0)
+		controlBlock.SetBTreeRootBlock(left.DataBlockID())
+		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
+		return
+	}
+
+	if !parent.IsRoot() && parent.EntriesCount() < uint16(idx.branchCapacity) {
+		log.Panic("Don't know how to cascade merges yet")
+	}
+}
+
+func (idx *bTreeIndex) handleRemoveOnRightMostLeaf(removedKey uint32, leaf BTreeLeaf) {
+	// We keep non empty right most leaf node around while they have at least
+	// one entry since new records will be added here
+	entriesCount := leaf.EntriesCount()
+	if entriesCount > 0 {
+		return
+	}
+
+	// If the node has zeroed out, we need to free it up and update related nodes
+	left := idx.leftLeafSibling(leaf)
+	if left == nil {
+		panic("TODO")
+	}
+	left.SetRightSiblingID(uint16(0))
+	idx.buffer.MarkAsDirty(left.DataBlockID())
+
+	parent := idx.parent(leaf)
+	parent.Remove(removedKey)
+	idx.buffer.MarkAsDirty(parent.DataBlockID())
+
+	log.Printf("IDX_REMOVE_LAST_LEAF blockID=%d", leaf.DataBlockID())
+	leaf.Reset()
+	blocksMap := &dataBlocksMap{idx.buffer}
+	blocksMap.MarkAsFree(leaf.DataBlockID())
+	idx.buffer.MarkAsDirty(leaf.DataBlockID())
+}
+
+func (idx *bTreeIndex) allocateBlock(blocksMap DataBlocksMap) *dbio.DataBlock {
+	blockID := blocksMap.FirstFree()
+	block, err := idx.buffer.FetchBlock(blockID)
+	if err != nil {
+		log.Panic(err)
+	}
+	blocksMap.MarkAsUsed(blockID)
+	return block
+}
+
+// Tree traversal =============================================================
 
 func (idx *bTreeIndex) parent(node BTreeNode) BTreeBranch {
 	if parentID := node.Parent(); parentID != 0 {
@@ -132,204 +352,4 @@ func (idx *bTreeIndex) findLeafFromBranch(branchNode BTreeBranch, searchKey uint
 		}
 	}
 	return nil
-}
-
-func (idx *bTreeIndex) addToBranchRoot(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32, rowID RowID) {
-	if branchNode.EntriesCount() == idx.branchCapacity {
-		log.Panic("Can't split branch yet")
-		// else if root is a branch and needs a split
-		//   right := CreateBTreeBranch
-		//   root.SetRightSibling(right.DataBlockID())
-		//   right.SetLeftSibling(root.DataBlockID())
-		//   newRoot := CreateBTreeBranch
-		//   entries := root.All()
-		//   // Since we always insert keys in order, we always append the record at the
-		//   // end of the node
-		//   // TODO: Add entries[entries/2+1:] to the right
-		//   // TODO: Add entries[entries/2] to the new root
-		//   // TODO: Remove entries[entries/2:] from root (reverse the list and remove from the end)
-		//   newRoot.Add(middle.RecordID, root.DataBlockID(), right.DataBlockID())
-		//   root.SetParent(newRoot.DataBlock())
-		//   right.SetParent(newRoot.DataBlock())
-		//   controlBlock.SetRootBTreeBlock(newRoot.DataBlockID())
-	}
-
-	leaf := idx.findLeafFromBranch(branchNode, searchKey)
-	if leaf == nil {
-		log.Fatalf("Don't know where to insert %d", searchKey)
-	}
-	idx.addToLeaf(controlBlock, leaf, searchKey, rowID)
-}
-
-func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32) {
-	leaf := idx.findLeafFromBranch(branchNode, searchKey)
-	leaf.Remove(searchKey)
-	idx.buffer.MarkAsDirty(leaf.DataBlockID())
-
-	entriesCount := leaf.EntriesCount()
-
-	if !branchNode.IsRoot() {
-		log.Panic("Don't know what to do with a branch that is not the root node")
-	}
-
-	if entriesCount == 0 && leaf.RightSibling() == 0 {
-		parent := idx.parent(leaf)
-		parent.Remove(searchKey)
-		idx.buffer.MarkAsDirty(parent.DataBlockID())
-
-		left := idx.leftLeafSibling(leaf)
-		left.SetRightSiblingID(0)
-		idx.buffer.MarkAsDirty(left.DataBlockID())
-
-		leaf.Reset()
-		idx.buffer.MarkAsDirty(leaf.DataBlockID())
-
-		dataBlocksMap := &dataBlocksMap{idx.buffer}
-		dataBlocksMap.MarkAsFree(leaf.DataBlockID())
-		return
-	}
-
-	if entriesCount == 0 {
-		log.Panic("Don't know what to do with a zeroed leaf yet")
-	}
-
-	// Do we need to think about moving keys around?
-	if entriesCount >= idx.halfLeafCapacity {
-		return
-	}
-
-	// Do we have a right sibling?
-	right := idx.rightLeafSibling(leaf)
-	if right == nil {
-		return
-	}
-
-	// Can we "borrow" a key from the right sibling instead of merging?
-	entriesCount = right.EntriesCount()
-	if entriesCount > idx.halfLeafCapacity {
-		idx.pipeFirst(leaf, right)
-		return
-	}
-
-	// Yes, we need to merge nodes
-	log.Printf("MERGE_LEAVES left=%d, right=%d", leaf.DataBlockID(), right.DataBlockID())
-	idx.mergeLeaves(controlBlock, leaf, right)
-}
-
-func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeLeaf) {
-	parent := idx.parent(left)
-	if !parent.IsRoot() {
-		log.Panic("Don't know how to merge a leaf into a parent that is not the root node")
-	}
-
-	rightEntries := right.All()
-	for _, entry := range rightEntries {
-		left.Add(entry.RecordID, entry)
-	}
-	if rightRightSibling := right.RightSibling(); rightRightSibling != 0 {
-		newRight := idx.repo.BTreeLeaf(rightRightSibling)
-		left.SetRightSibling(newRight)
-		newRight.SetLeftSibling(left)
-		idx.buffer.MarkAsDirty(newRight.DataBlockID())
-	}
-	idx.buffer.MarkAsDirty(left.DataBlockID())
-
-	right.Reset()
-	dataBlocksMap := &dataBlocksMap{idx.buffer}
-	dataBlocksMap.MarkAsFree(right.DataBlockID())
-	idx.buffer.MarkAsDirty(right.DataBlockID())
-
-	parent.Remove(rightEntries[0].RecordID)
-	idx.buffer.MarkAsDirty(parent.DataBlockID())
-
-	if parent.IsRoot() && parent.EntriesCount() == 0 {
-		parent.Reset()
-		dataBlocksMap.MarkAsFree(parent.DataBlockID())
-
-		left.SetParentID(0)
-		controlBlock.SetBTreeRootBlock(left.DataBlockID())
-		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
-		return
-	}
-	if !parent.IsRoot() && parent.EntriesCount() < idx.branchCapacity {
-		log.Panic("Don't know how to cascade merges yet")
-	}
-}
-
-func (idx *bTreeIndex) pipeFirst(left, right BTreeLeaf) {
-	rowID := right.Shift()
-	idx.buffer.MarkAsDirty(right.DataBlockID())
-
-	log.Printf("INDEX_PIPE left=%d, right=%d, key=%d", left.DataBlockID(), right.DataBlockID(), rowID.RecordID)
-
-	left.Add(rowID.RecordID, rowID)
-	idx.buffer.MarkAsDirty(left.DataBlockID())
-
-	parent := idx.parent(left)
-	parent.ReplaceKey(rowID.RecordID, right.First().RecordID)
-	idx.buffer.MarkAsDirty(parent.DataBlockID())
-}
-
-func (idx *bTreeIndex) addToLeaf(controlBlock ControlBlock, leaf BTreeLeaf, searchKey uint32, rowID RowID) {
-	if leaf.IsFull() {
-		log.Printf("INDEX_LEAF_SPLIT blockid=%d, searchkey=%d, rowid=%+v", leaf.DataBlockID(), searchKey, rowID)
-		idx.handleLeafSplit(controlBlock, leaf, searchKey, rowID)
-	} else {
-		log.Printf("INDEX_ADD blockid=%d, searchkey=%d, rowid=%+v", leaf.DataBlockID(), searchKey, rowID)
-		leaf.Add(searchKey, rowID)
-		idx.buffer.MarkAsDirty(leaf.DataBlockID())
-	}
-}
-
-func (idx *bTreeIndex) handleLeafSplit(controlBlock ControlBlock, leaf BTreeLeaf, searchKey uint32, rowID RowID) {
-	blocksMap := &dataBlocksMap{idx.buffer}
-
-	right := idx.allocateLeaf(blocksMap)
-	log.Debugf("Right node of the leaf node will be set to %d", right.DataBlockID())
-	right.Add(searchKey, rowID)
-	idx.buffer.MarkAsDirty(right.DataBlockID())
-
-	parent := idx.parent(leaf)
-	if parent == nil { // AKA split on root node
-		parent = idx.allocateBranch(blocksMap)
-		log.Printf("SET_BTREE_ROOT datablockid=%d", parent.DataBlockID())
-		controlBlock.SetBTreeRootBlock(parent.DataBlockID())
-		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
-	}
-
-	log.Printf("HANDLE_SPLIT datablockid=%d, parent=%d, right=%d", leaf.DataBlockID(), parent.DataBlockID(), right.DataBlockID())
-
-	// Add entry to the internal branch node
-	parent.Add(searchKey, leaf, right)
-
-	// Update sibling pointers
-	right.SetLeftSibling(leaf)
-	leaf.SetRightSibling(right)
-
-	// Set parent node pointers
-	right.SetParent(parent)
-	leaf.SetParent(parent)
-
-	// Let data be persisted
-	idx.buffer.MarkAsDirty(right.DataBlockID())
-	idx.buffer.MarkAsDirty(parent.DataBlockID())
-	idx.buffer.MarkAsDirty(leaf.DataBlockID())
-}
-
-func (idx *bTreeIndex) allocateLeaf(blocksMap DataBlocksMap) BTreeLeaf {
-	return CreateBTreeLeaf(idx.allocateBlock(blocksMap))
-}
-
-func (idx *bTreeIndex) allocateBranch(blocksMap DataBlocksMap) BTreeBranch {
-	return CreateBTreeBranch(idx.allocateBlock(blocksMap))
-}
-
-func (idx *bTreeIndex) allocateBlock(blocksMap DataBlocksMap) *dbio.DataBlock {
-	blockID := blocksMap.FirstFree()
-	block, err := idx.buffer.FetchBlock(blockID)
-	if err != nil {
-		log.Panic(err)
-	}
-	blocksMap.MarkAsUsed(blockID)
-	return block
 }

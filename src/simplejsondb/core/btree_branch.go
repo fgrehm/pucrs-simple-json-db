@@ -40,7 +40,7 @@ func CreateBTreeBranch(block *dbio.DataBlock) BTreeBranch {
 }
 
 func (b *bTreeBranch) Find(searchKey uint32) uint16 {
-	log.Printf("BRANCH_FIND blockid=%d, searchkey=%d", b.block.ID, searchKey)
+	log.Infof("BRANCH_FIND blockid=%d, searchkey=%d", b.block.ID, searchKey)
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
 	if entriesCount == 0 {
@@ -48,12 +48,12 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 	}
 
 	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
-		log.Printf("BRANCH_FIND_LAST entry=%+v", lastEntry)
+		log.Infof("BRANCH_FIND_LAST entry=%+v", lastEntry)
 		return lastEntry.gteBlockID
 	}
 
 	if firstEntry := b.firstEntry(); searchKey < firstEntry.searchKey {
-		log.Printf("BRANCH_FIND_FIRST entry=%+v", firstEntry)
+		log.Infof("BRANCH_FIND_FIRST entry=%+v", firstEntry)
 		return firstEntry.ltBlockID
 	}
 
@@ -63,6 +63,7 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 	offset := int(BTREE_POS_ENTRIES_OFFSET) + BTREE_BRANCH_ENTRY_JUMP
 	for i := 0; i < entriesCount; i++ {
 		keyFound := b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY)
+		log.Infof("BRANCH_KEY_FOUND keyFound=%+v", keyFound)
 		// We have a match!
 		if keyFound >= searchKey {
 			entryToFollowKey = keyFound
@@ -77,16 +78,16 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 	}
 
 	if searchKey >= entryToFollowKey {
-		log.Printf("BRANCH_FIND_FOUND searchkey >= entryKey=%+v", entryToFollowKey)
+		log.Infof("BRANCH_FIND_FOUND searchkey >= entryKey=%+v", entryToFollowKey)
 		return b.block.ReadUint16(entryToFollowPtr + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID)
 	} else {
-		log.Printf("BRANCH_FIND_FOUND searchkey < entryKey=%+v", entryToFollowKey)
+		log.Infof("BRANCH_FIND_FOUND searchkey < entryKey=%+v", entryToFollowKey)
 		return b.block.ReadUint16(entryToFollowPtr + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID)
 	}
 }
 
 func (b *bTreeBranch) Add(searchKey uint32, leftNode, rightNode BTreeNode) {
-	log.Printf("BRANCH_ADD blockid=%d, searchkey=%d, leftid=%d, rightid=%d", b.block.ID, searchKey, leftNode.DataBlockID(), rightNode.DataBlockID())
+	log.Infof("IDX_BRANCH_ADD blockid=%d, searchkey=%d, leftid=%d, rightid=%d", b.block.ID, searchKey, leftNode.DataBlockID(), rightNode.DataBlockID())
 
 	entriesCount := b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
 
@@ -104,23 +105,23 @@ func (b *bTreeBranch) Add(searchKey uint32, leftNode, rightNode BTreeNode) {
 func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
-	log.Printf("REPLACE_KEY blockid=%d, old=%d, new=%d, entriescount=%d", b.block.ID, oldValue, newValue, entriesCount)
+	log.Debugf("REPLACE_KEY blockid=%d, old=%d, new=%d, entriescount=%d", b.block.ID, oldValue, newValue, entriesCount)
 
 	// If there is only one entry on the node, just update the search key
 	if entriesCount == 1 {
-		log.Printf("REPLACE_KEY on first entry")
+		log.Debugf("REPLACE_KEY on first entry")
 		b.block.Write(BTREE_POS_ENTRIES_OFFSET+BTREE_BRANCH_OFFSET_KEY, newValue)
 		return
 	}
 
 	if lastEntry := b.lastEntry(); oldValue >= lastEntry.searchKey {
-		log.Printf("REPLACE_KEY on last entry %d", lastEntry.searchKey)
+		log.Debugf("REPLACE_KEY on last entry %d", lastEntry.searchKey)
 		b.block.Write(int(lastEntry.startsAt+BTREE_BRANCH_OFFSET_KEY), newValue)
 		return
 	}
 
 	if firstEntry := b.firstEntry(); oldValue <= firstEntry.searchKey {
-		log.Printf("REPLACE_KEY on first entry %d", firstEntry.searchKey)
+		log.Debugf("REPLACE_KEY on first entry %d", firstEntry.searchKey)
 		b.block.Write(int(firstEntry.startsAt+BTREE_BRANCH_OFFSET_KEY), newValue)
 		return
 	}
@@ -132,7 +133,7 @@ func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 
 		// We have a match!
 		if keyFound >= oldValue {
-			log.Printf("REPLACE_KEY on %dth entry %d", i, keyFound)
+			log.Debugf("REPLACE_KEY on %dth entry %d", i, keyFound)
 			b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_KEY, newValue)
 			return
 		}
@@ -143,7 +144,7 @@ func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 func (b *bTreeBranch) Remove(searchKey uint32) {
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
-	log.Printf("BRANCH_REMOVE blockid=%d, searchkey=%d, entriescount=%d", b.block.ID, searchKey, entriesCount)
+	log.Infof("BRANCH_REMOVE blockid=%d, searchkey=%d, entriescount=%d", b.block.ID, searchKey, entriesCount)
 
 	// If there is only one entry on the node, just update the counter
 	if entriesCount == 1 {
@@ -153,7 +154,7 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 
 	// If we are removing the last key, just update the entries count and call it a day
 	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
-		log.Printf("BRANCH_REMOVE_LAST keyfound=%d, searchkey=%d, ptr=%d", lastEntry.searchKey, lastEntry.searchKey, lastEntry.startsAt)
+		log.Infof("BRANCH_REMOVE_LAST keyfound=%d, searchkey=%d, ptr=%d", lastEntry.searchKey, lastEntry.searchKey, lastEntry.startsAt)
 		b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount-1))
 		return
 	}
@@ -167,7 +168,7 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 		// We have a match!
 		if searchKey >= keyFound {
 			entryToRemovePtr = initialOffset
-			log.Printf("BRANCH_REMOVE keyfound=%d, searchkey=%d, position=%d, ptr=%d", keyFound, searchKey, i, entryToRemovePtr)
+			log.Infof("BRANCH_REMOVE keyfound=%d, searchkey=%d, position=%d, ptr=%d", keyFound, searchKey, i, entryToRemovePtr)
 			break
 		}
 	}
