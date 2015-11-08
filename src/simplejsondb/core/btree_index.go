@@ -2,8 +2,8 @@ package core
 
 import (
 	"fmt"
-	"simplejsondb/dbio"
 	log "github.com/Sirupsen/logrus"
+	"simplejsondb/dbio"
 )
 
 type BTreeIndex interface {

@@ -70,7 +70,7 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 	leafCapacity := 4
 	index := createTestBTreeIndex(t, 9, 10, branchCapacity, leafCapacity)
 
-	totalEntries := (branchCapacity+1) * leafCapacity
+	totalEntries := (branchCapacity + 1) * leafCapacity
 	// Trigger lots of splits on leaf nodes attached to the root
 	assertIndexCanAddAndFindN(t, index, totalEntries)
 
@@ -214,8 +214,8 @@ func assertIndexCanFindRange(t *testing.T, index core.BTreeIndex, firstID, lastI
 	for id := firstID; id <= lastID; id++ {
 		expectedRowID := core.RowID{
 			RecordID:    id,
-			DataBlockID: uint16((id-1) % 10),
-			LocalID:     uint16((id-1) % 100),
+			DataBlockID: uint16((id - 1) % 10),
+			LocalID:     uint16((id - 1) % 100),
 		}
 
 		rowID, err := index.Find(id)
