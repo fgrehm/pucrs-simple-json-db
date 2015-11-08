@@ -201,7 +201,7 @@ func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BT
 	// Did we get to the right most leaf?
 	right := idx.rightLeafSibling(leaf)
 	if right == nil {
-		idx.handleRemoveOnRightMostLeaf(searchKey, leaf)
+		idx.handleRemoveOnRightMostLeaf(controlBlock, searchKey, leaf)
 		return
 	}
 
@@ -277,22 +277,21 @@ func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeL
 	}
 
 	if !parent.IsRoot() && parent.EntriesCount() < uint16(idx.branchCapacity) {
-		log.Panic("Don't know how to cascade merges yet")
+		panic("Don't know how to cascade merges yet")
 	}
 }
 
-func (idx *bTreeIndex) handleRemoveOnRightMostLeaf(removedKey uint32, leaf BTreeLeaf) {
+func (idx *bTreeIndex) handleRemoveOnRightMostLeaf(controlBlock ControlBlock, removedKey uint32, leaf BTreeLeaf) {
 	// We keep non empty right most leaf node around while they have at least
 	// one entry since new records will be added here
-	entriesCount := leaf.EntriesCount()
-	if entriesCount > 0 {
+	if leaf.EntriesCount() > 0 {
 		return
 	}
 
 	// If the node has zeroed out, we need to free it up and update related nodes
 	left := idx.leftLeafSibling(leaf)
 	if left == nil {
-		panic("TODO")
+		panic("Something weird happened")
 	}
 	left.SetRightSiblingID(uint16(0))
 	idx.buffer.MarkAsDirty(left.DataBlockID())
@@ -306,6 +305,23 @@ func (idx *bTreeIndex) handleRemoveOnRightMostLeaf(removedKey uint32, leaf BTree
 	blocksMap := &dataBlocksMap{idx.buffer}
 	blocksMap.MarkAsFree(leaf.DataBlockID())
 	idx.buffer.MarkAsDirty(leaf.DataBlockID())
+
+	if parent.IsRoot() && parent.EntriesCount() == 0 {
+		log.Printf("IDX_SET_ROOT blockID=%d", left.DataBlockID())
+
+		parent.Reset()
+		blocksMap.MarkAsFree(parent.DataBlockID())
+
+		left.SetParentID(0)
+		left.SetRightSiblingID(0)
+		controlBlock.SetBTreeRootBlock(left.DataBlockID())
+		idx.buffer.MarkAsDirty(controlBlock.DataBlockID())
+		return
+	}
+
+	if !parent.IsRoot() && parent.EntriesCount() < uint16(idx.branchCapacity) {
+		panic("Don't know how to cascade merges yet")
+	}
 }
 
 func (idx *bTreeIndex) allocateBlock(blocksMap DataBlocksMap) *dbio.DataBlock {
