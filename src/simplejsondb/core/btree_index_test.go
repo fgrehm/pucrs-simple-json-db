@@ -88,13 +88,46 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 	// Ensure things got restored to a state that the tree can be used again
 	assertIndexCanAddAndFindN(t, index, totalEntries)
 	// Ensure we can deal with removing entries from right to left
-	assertIndexCanRemoveReverseRange(t, index, uint32(1), uint32(totalEntries))
+	assertIndexCanRemoveReverseRange(t, index, 1, totalEntries)
 
 	// What about removing chunks of keys
 	assertIndexCanAddAndFindN(t, index, totalEntries)
-	assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/4, uint32(totalEntries)/2)
-	assertIndexCanFindRange(t, index, 1, uint32(totalEntries)/4-1)
-	assertIndexCanFindRange(t, index, uint32(totalEntries)/2+1, uint32(totalEntries))
+	assertIndexCanRemoveReverseRange(t, index, totalEntries/4, totalEntries/2)
+	assertIndexCanFindRange(t, index, 1, totalEntries/4-1)
+	assertIndexCanFindRange(t, index, totalEntries/2+1, totalEntries)
+}
+
+func TestBTreeIndex_BranchRootSplitOnBranchesAndMergeBack(t *testing.T) {
+	branchCapacity := 6
+	leafCapacity := 4
+	index := createTestBTreeIndex(t, 200, 25, branchCapacity, leafCapacity)
+
+	totalEntries := (branchCapacity + 1) * (branchCapacity + 1 ) * leafCapacity
+	// Trigger lots of splits on leaf nodes attached to the root
+	assertIndexCanAddAndFindN(t, index, totalEntries)
+	assertIndexCanFindRange(t, index, 1, totalEntries)
+
+	// Ensure we error when an unknown record has been asked after all those splits
+	if _, err := index.Find(uint32(totalEntries * 2)); err == nil {
+		t.Fatal("Did not return an error when finding a record that does not exist")
+	}
+
+	// Remove all of the records we have just inserted and collapse the tree
+	// into a leaf node again
+	assertIndexCanRemoveN(t, index, totalEntries)
+	// Ensure we can't load the records anymore
+	assertIndexFindErrorN(t, index, totalEntries)
+
+	// // Ensure things got restored to a state that the tree can be used again
+	// assertIndexCanAddAndFindN(t, index, totalEntries)
+	// // Ensure we can deal with removing entries from right to left
+	// assertIndexCanRemoveReverseRange(t, index, uint32(1), uint32(totalEntries))
+
+	// // What about removing chunks of keys
+	// assertIndexCanAddAndFindN(t, index, totalEntries)
+	// assertIndexCanRemoveReverseRange(t, index, uint32(totalEntries)/4, uint32(totalEntries)/2)
+	// assertIndexCanFindRange(t, index, 1, uint32(totalEntries)/4-1)
+	// assertIndexCanFindRange(t, index, uint32(totalEntries)/2+1, uint32(totalEntries))
 }
 
 func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity, leafCapacity int) core.BTreeIndex {
@@ -142,10 +175,10 @@ func assertIndexFindErrorN(t *testing.T, index core.BTreeIndex, totalRecords int
 func assertIndexCanAddAndFindN(t *testing.T, index core.BTreeIndex, totalRecords int) {
 	expectedRowIDs := []core.RowID{}
 	for i := 0; i < totalRecords; i++ {
-		id := uint32(i + 1)
+		id := i + 1
 		expectedRowID := indexInsert(index, id, i)
 
-		rowID, err := index.Find(id)
+		rowID, err := index.Find(uint32(id))
 		if err != nil {
 			panic(fmt.Sprintf("Error while fetching %d: %s", id, err))
 		}
@@ -166,15 +199,15 @@ func assertIndexCanAddAndFindN(t *testing.T, index core.BTreeIndex, totalRecords
 	}
 }
 
-func assertIndexCanFindRange(t *testing.T, index core.BTreeIndex, firstID, lastID uint32) {
+func assertIndexCanFindRange(t *testing.T, index core.BTreeIndex, firstID, lastID int) {
 	for id := firstID; id <= lastID; id++ {
 		expectedRowID := core.RowID{
-			RecordID:    id,
+			RecordID:    uint32(id),
 			DataBlockID: uint16((id - 1) % 10),
 			LocalID:     uint16((id - 1) % 100),
 		}
 
-		rowID, err := index.Find(id)
+		rowID, err := index.Find(uint32(id))
 		if err != nil {
 			panic(fmt.Sprintf("Error while fetching %d: %s", id, err))
 		}
@@ -187,17 +220,17 @@ func assertIndexCanFindRange(t *testing.T, index core.BTreeIndex, firstID, lastI
 
 func indexInsertN(index core.BTreeIndex, totalRecords int) {
 	for i := 0; i < totalRecords; i++ {
-		indexInsert(index, uint32(i+1), i)
+		indexInsert(index, i+1, i)
 	}
 }
 
-func indexInsert(index core.BTreeIndex, id uint32, position int) core.RowID {
+func indexInsert(index core.BTreeIndex, id int, position int) core.RowID {
 	rowID := core.RowID{
-		RecordID:    id,
+		RecordID:    uint32(id),
 		DataBlockID: uint16(position % 10),
 		LocalID:     uint16(position % 100),
 	}
-	index.Add(id, rowID)
+	index.Add(uint32(id), rowID)
 	return rowID
 }
 
@@ -224,10 +257,10 @@ func assertIndexCanRemoveRange(t *testing.T, index core.BTreeIndex, firstID, las
 	}
 }
 
-func assertIndexCanRemoveReverseRange(t *testing.T, index core.BTreeIndex, firstID, lastID uint32) {
+func assertIndexCanRemoveReverseRange(t *testing.T, index core.BTreeIndex, firstID, lastID int) {
 	totalBefore := len(index.All())
 	for id := lastID; id >= firstID; id-- {
-		index.Remove(id)
+		index.Remove(uint32(id))
 	}
 	totalAfter := len(index.All())
 	if totalBefore != totalAfter+int(lastID-firstID)+1 {
