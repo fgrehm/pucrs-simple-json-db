@@ -164,6 +164,8 @@ func (idx *bTreeIndex) addToBranch(blocksMap DataBlocksMap, searchKey uint32, br
 		return
 	}
 
+	log.Printf("IDX_BRANCH_SPLIT blockID=%d, searchKey=%d", branch.DataBlockID(), searchKey)
+
 	parent := idx.parent(branch)
 	if parent == nil { // AKA split on root node
 		parent = CreateBTreeBranch(idx.allocateBlock(blocksMap))
@@ -175,6 +177,8 @@ func (idx *bTreeIndex) addToBranch(blocksMap DataBlocksMap, searchKey uint32, br
 	}
 
 	rightBranchSibling := CreateBTreeBranch(idx.allocateBlock(blocksMap))
+	log.Printf("IDX_BRANCH_ALLOC leftID=%d, parentID=%d, rightID=%d", branch.DataBlockID(), parent.DataBlockID(), rightBranchSibling.DataBlockID())
+
 	rightBranchSibling.SetLeftSibling(branch)
 	rightBranchSibling.Add(searchKey, left, right)
 	rightBranchSibling.SetParent(parent)
@@ -182,14 +186,15 @@ func (idx *bTreeIndex) addToBranch(blocksMap DataBlocksMap, searchKey uint32, br
 
 	left.SetParent(rightBranchSibling)
 	idx.buffer.MarkAsDirty(left.DataBlockID())
+
 	right.SetParent(rightBranchSibling)
 	idx.buffer.MarkAsDirty(right.DataBlockID())
 
+	parentSearchKey := branch.Pop()
 	branch.SetRightSibling(rightBranchSibling)
 	idx.buffer.MarkAsDirty(branch.DataBlockID())
 
-	log.Printf("IDX_BRANCH_ALLOC leftID=%d, parentID=%d, rightID=%d", branch.DataBlockID(), parent.DataBlockID(), rightBranchSibling.DataBlockID())
-	idx.addToBranch(blocksMap, searchKey, parent, branch, rightBranchSibling)
+	idx.addToBranch(blocksMap, parentSearchKey, parent, branch, rightBranchSibling)
 }
 
 func (idx *bTreeIndex) removeStartingFromBranch(branchNode BTreeBranch, searchKey uint32) {
@@ -253,7 +258,7 @@ func (idx *bTreeIndex) pipeLeaf(left, right BTreeLeaf) {
 	rowID := right.Shift()
 	idx.buffer.MarkAsDirty(right.DataBlockID())
 
-	log.Printf("IDX_PIPE key=%d, from=%d, to=%d", rowID.RecordID, right.DataBlockID(), left.DataBlockID())
+	log.Printf("IDX_PIPE_LEAF key=%d, from=%d, to=%d", rowID.RecordID, right.DataBlockID(), left.DataBlockID())
 
 	left.Add(rowID.RecordID, rowID)
 	idx.buffer.MarkAsDirty(left.DataBlockID())

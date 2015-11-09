@@ -100,7 +100,7 @@ func TestBTreeIndex_BranchRootSplitOnLeavesAndMergeBack(t *testing.T) {
 func TestBTreeIndex_BranchRootSplitOnBranchesAndMergeBack(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
-	index := createTestBTreeIndex(t, 200, 25, branchCapacity, leafCapacity)
+	index := createTestBTreeIndex(t, 200, 21, branchCapacity, leafCapacity)
 
 	totalEntries := (branchCapacity + 1) * (branchCapacity + 1 ) * leafCapacity
 	// Trigger lots of splits on leaf nodes attached to the root

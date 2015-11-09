@@ -12,6 +12,7 @@ type BTreeBranch interface {
 	Remove(searchKey uint32)
 	ReplaceKey(oldValue, newValue uint32)
 	Find(searchKey uint32) uint16
+	Pop() uint32
 }
 
 const (
@@ -155,7 +156,7 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 
 	// If we are removing the last key, just update the entries count and call it a day
 	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
-		log.Infof("IDX_BRANCH_REMOVE_LAST keyfound=%d, searchkey=%d, ptr=%d", lastEntry.searchKey, lastEntry.searchKey, lastEntry.startsAt)
+		log.Infof("IDX_BRANCH_REMOVE_LAST keyFound=%d, searchKey=%d, ptr=%d", lastEntry.searchKey, searchKey, lastEntry.startsAt)
 		b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount-1))
 		return
 	}
@@ -201,6 +202,12 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 	for i := entryToRemovePtr; i < lastByteToOverwrite; i++ {
 		b.block.Data[i] = b.block.Data[i+BTREE_BRANCH_ENTRY_JUMP]
 	}
+}
+
+func (b *bTreeBranch) Pop() uint32 {
+	lastEntry := b.lastEntry()
+	b.Remove(lastEntry.searchKey)
+	return lastEntry.searchKey
 }
 
 func (b *bTreeBranch) firstEntry() bTreeBranchEntry {
