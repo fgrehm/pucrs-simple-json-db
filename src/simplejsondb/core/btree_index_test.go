@@ -118,7 +118,7 @@ func TestBTreeIndex_BranchRootSplitOnBranchesAndMergeBack(t *testing.T) {
 	// Ensure we can't load the records anymore
 	assertIndexFindErrorN(t, index, totalEntries)
 
-	// // Ensure things got restored to a state that the tree can be used again
+	// Ensure things got restored to a state that the tree can be used again
 	// assertIndexCanAddAndFindN(t, index, totalEntries)
 	// // Ensure we can deal with removing entries from right to left
 	// assertIndexCanRemoveReverseRange(t, index, uint32(1), uint32(totalEntries))
