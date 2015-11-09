@@ -126,7 +126,7 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchC
 		blockMap.MarkAsUsed(i)
 	}
 
-	return core.NewBTreeIndex(dataBuffer, repo, leafCapacity, branchCapacity)
+	return core.NewBTreeIndex(dataBuffer, repo, uint16(leafCapacity), uint16(branchCapacity))
 }
 
 func assertIndexFindErrorN(t *testing.T, index core.BTreeIndex, totalRecords int) {

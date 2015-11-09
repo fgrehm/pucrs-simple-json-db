@@ -16,11 +16,11 @@ type BTreeIndex interface {
 type bTreeIndex struct {
 	buffer                             dbio.DataBuffer
 	repo                               DataBlockRepository
-	leafCapacity, halfLeafCapacity     int
-	branchCapacity, halfBranchCapacity int
+	leafCapacity, halfLeafCapacity     uint16
+	branchCapacity, halfBranchCapacity uint16
 }
 
-func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockRepository, leafCapacity, branchCapacity int) BTreeIndex {
+func NewBTreeIndex(buffer dbio.DataBuffer, dataBlockRepository DataBlockRepository, leafCapacity, branchCapacity uint16) BTreeIndex {
 	return &bTreeIndex{
 		buffer:             buffer,
 		repo:               dataBlockRepository,
@@ -36,12 +36,17 @@ func (idx *bTreeIndex) Add(searchKey uint32, rowID RowID) {
 	root := idx.repo.BTreeNode(controlBlock.BTreeRootBlock())
 	log.Printf("==IDX_ADD_BEGIN rootBlockID=%d, searchKey=%d, rowID=%+v", root.DataBlockID(), searchKey, rowID)
 
+	var leaf BTreeLeaf
 	if leafRoot, isLeaf := root.(BTreeLeaf); isLeaf {
-		idx.addToLeaf(controlBlock, leafRoot, searchKey, rowID)
+		leaf = leafRoot
 	} else {
 		branchRoot, _ := root.(BTreeBranch)
-		idx.addToBranch(controlBlock, branchRoot, searchKey, rowID)
+		leaf = idx.findLeafFromBranch(branchRoot, searchKey)
 	}
+	if leaf == nil {
+		log.Fatalf("Don't know where to insert %d", searchKey)
+	}
+	idx.addToLeaf(controlBlock, leaf, searchKey, rowID)
 	log.Printf("==IDX_ADD_END searchKey=%d", searchKey)
 }
 
@@ -111,37 +116,8 @@ func (idx *bTreeIndex) All() []RowID {
 
 // Node manipulation ==========================================================
 
-func (idx *bTreeIndex) addToBranch(controlBlock ControlBlock, branchNode BTreeBranch, searchKey uint32, rowID RowID) {
-	leaf := idx.findLeafFromBranch(branchNode, searchKey)
-	if leaf == nil {
-		log.Fatalf("Don't know where to insert %d", searchKey)
-	}
-
-	if branchNode.EntriesCount() == uint16(idx.branchCapacity) {
-		if leaf.EntriesCount() == uint16(idx.leafCapacity) {
-			panic("Can't split branch yet")
-		}
-		//   right := CreateBTreeBranch
-		//   root.SetRightSibling(right.DataBlockID())
-		//   right.SetLeftSibling(root.DataBlockID())
-		//   newRoot := CreateBTreeBranch
-		//   entries := root.All()
-		//   // Since we always insert keys in order, we always append the record at the
-		//   // end of the node
-		//   // TODO: Add entries[entries/2+1:] to the right
-		//   // TODO: Add entries[entries/2] to the new root
-		//   // TODO: Remove entries[entries/2:] from root (reverse the list and remove from the end)
-		//   newRoot.Add(middle.RecordID, root.DataBlockID(), right.DataBlockID())
-		//   root.SetParent(newRoot.DataBlock())
-		//   right.SetParent(newRoot.DataBlock())
-		//   controlBlock.SetRootBTreeBlock(newRoot.DataBlockID())
-	}
-
-	idx.addToLeaf(controlBlock, leaf, searchKey, rowID)
-}
-
 func (idx *bTreeIndex) addToLeaf(controlBlock ControlBlock, leaf BTreeLeaf, searchKey uint32, rowID RowID) {
-	if leaf.EntriesCount() == uint16(idx.leafCapacity) {
+	if leaf.EntriesCount() == idx.leafCapacity {
 		idx.handleLeafSplit(controlBlock, leaf, searchKey, rowID)
 	} else {
 		log.Printf("IDX_ADD_TO_LEAF blockID=%d", leaf.DataBlockID())
@@ -170,6 +146,9 @@ func (idx *bTreeIndex) handleLeafSplit(controlBlock ControlBlock, leaf BTreeLeaf
 	log.Printf("IDX_LEAF_ALLOC leftID=%d, parentID=%d, rightID=%d", leaf.DataBlockID(), parent.DataBlockID(), right.DataBlockID())
 
 	// Add entry to the internal branch node
+	if parent.EntriesCount() == idx.branchCapacity {
+		panic("Can't split branch yet")
+	}
 	parent.Add(searchKey, leaf, right)
 
 	// Update sibling pointers
@@ -206,13 +185,13 @@ func (idx *bTreeIndex) removeFromBranch(controlBlock ControlBlock, branchNode BT
 	}
 
 	// Do we need to worry about moving keys around?
-	if entriesCount >= uint16(idx.halfLeafCapacity) {
+	if entriesCount >= idx.halfLeafCapacity {
 		return
 	}
 
 	// Can we "borrow" a key from the right sibling instead of merging?
 	rightNodeEntriesCount := right.EntriesCount()
-	if rightNodeEntriesCount > uint16(idx.halfLeafCapacity) {
+	if rightNodeEntriesCount > idx.halfLeafCapacity {
 		idx.pipeFirst(leaf, right)
 		return
 	}
@@ -276,7 +255,7 @@ func (idx *bTreeIndex) mergeLeaves(controlBlock ControlBlock, left, right BTreeL
 		return
 	}
 
-	if !parent.IsRoot() && parent.EntriesCount() < uint16(idx.branchCapacity) {
+	if !parent.IsRoot() && parent.EntriesCount() < idx.branchCapacity {
 		panic("Don't know how to cascade merges yet")
 	}
 }
@@ -319,7 +298,7 @@ func (idx *bTreeIndex) handleRemoveOnRightMostLeaf(controlBlock ControlBlock, re
 		return
 	}
 
-	if !parent.IsRoot() && parent.EntriesCount() < uint16(idx.branchCapacity) {
+	if !parent.IsRoot() && parent.EntriesCount() < idx.branchCapacity {
 		panic("Don't know how to cascade merges yet")
 	}
 }
