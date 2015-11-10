@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"sort"
 	"simplejsondb/dbio"
 )
 
@@ -35,21 +36,28 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 	return &bTreeLeaf{node}
 }
 
-// NOTE: This assumes that search keys will be added in order
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
 
-	log.Debugf("LEAF_ADD blockid=%d, searchkey=%d, rowid=%+v, entriescount=%d", l.block.ID, searchKey, rowID, entriesCount)
+	addPosition := sort.Search(int(entriesCount), func (i int) bool {
+		offset := int(BTREE_POS_ENTRIES_OFFSET) + int(i) * int(BTREE_LEAF_ENTRY_SIZE)
+		keyFound := l.block.ReadUint32(offset + BTREE_LEAF_OFFSET_KEY)
+		return keyFound >= searchKey
+	})
+	writeOffset := int(BTREE_POS_ENTRIES_OFFSET) + int(addPosition)*int(BTREE_LEAF_ENTRY_SIZE)
+	if uint16(addPosition) < entriesCount && searchKey == l.block.ReadUint32(writeOffset + BTREE_LEAF_OFFSET_KEY) {
+		panic(fmt.Sprintf("Duplicate key detected: %d", searchKey))
+	}
 
-	// Since we always insert keys in order, we always append the record at the
-	// end of the node
-	initialOffset := int(BTREE_POS_ENTRIES_OFFSET) + int(entriesCount)*int(BTREE_LEAF_ENTRY_SIZE)
-	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_KEY, searchKey)
-	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_BLOCK_ID, rowID.DataBlockID)
-	l.block.Write(initialOffset+BTREE_LEAF_OFFSET_LOCAL_ID, rowID.LocalID)
+	l.block.Unshift(writeOffset, BTREE_LEAF_ENTRY_SIZE)
+	l.block.Write(writeOffset+BTREE_LEAF_OFFSET_KEY, searchKey)
+	l.block.Write(writeOffset+BTREE_LEAF_OFFSET_BLOCK_ID, rowID.DataBlockID)
+	l.block.Write(writeOffset+BTREE_LEAF_OFFSET_LOCAL_ID, rowID.LocalID)
 
 	entriesCount += 1
 	l.block.Write(BTREE_POS_ENTRIES_COUNT, entriesCount)
+
+	log.Infof("IDX_LEAF_ADDED blockID=%d, searchKey=%d, position=%d, entriesCount=%d, rowID=%+v", l.block.ID, searchKey, addPosition, entriesCount, rowID)
 }
 
 func (l *bTreeLeaf) Find(searchKey uint32) RowID {

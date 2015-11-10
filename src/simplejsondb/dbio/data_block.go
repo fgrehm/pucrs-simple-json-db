@@ -44,3 +44,10 @@ func (db *DataBlock) Write(position int, v interface{}) {
 		panic(fmt.Sprintf("Don't know how to write %+v", x))
 	}
 }
+
+func (db *DataBlock) Unshift(position, count int) {
+	endOfShift := len(db.Data) - 1 - count
+	for i := endOfShift; i >= position; i-- {
+		db.Data[i+count] = db.Data[i]
+	}
+}
