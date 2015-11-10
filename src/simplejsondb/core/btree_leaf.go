@@ -3,8 +3,8 @@ package core
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"sort"
 	"simplejsondb/dbio"
+	"sort"
 )
 
 type BTreeLeaf interface {
@@ -39,13 +39,13 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
 
-	addPosition := sort.Search(int(entriesCount), func (i int) bool {
-		offset := int(BTREE_POS_ENTRIES_OFFSET) + int(i) * int(BTREE_LEAF_ENTRY_SIZE)
+	addPosition := sort.Search(int(entriesCount), func(i int) bool {
+		offset := int(BTREE_POS_ENTRIES_OFFSET) + int(i)*int(BTREE_LEAF_ENTRY_SIZE)
 		keyFound := l.block.ReadUint32(offset + BTREE_LEAF_OFFSET_KEY)
 		return keyFound >= searchKey
 	})
 	writeOffset := int(BTREE_POS_ENTRIES_OFFSET) + int(addPosition)*int(BTREE_LEAF_ENTRY_SIZE)
-	if uint16(addPosition) < entriesCount && searchKey == l.block.ReadUint32(writeOffset + BTREE_LEAF_OFFSET_KEY) {
+	if uint16(addPosition) < entriesCount && searchKey == l.block.ReadUint32(writeOffset+BTREE_LEAF_OFFSET_KEY) {
 		panic(fmt.Sprintf("Duplicate key detected: %d", searchKey))
 	}
 

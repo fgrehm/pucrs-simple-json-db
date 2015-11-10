@@ -111,7 +111,7 @@ func TestBTreeIndex_BranchRootSplitOnBranchesAndMergeBack(t *testing.T) {
 	leafCapacity := 4
 	index := createTestBTreeIndex(t, 200, 21, branchCapacity, leafCapacity)
 
-	totalEntries := (branchCapacity + 1) * (branchCapacity + 1 ) * leafCapacity
+	totalEntries := (branchCapacity + 1) * (branchCapacity + 1) * leafCapacity
 	// Trigger lots of splits on leaf nodes attached to the root
 	assertIndexCanAddAndFindN(t, index, totalEntries)
 	assertIndexCanFindRange(t, index, 1, totalEntries)
@@ -176,7 +176,7 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchC
 func indexInsert(index core.BTreeIndex, id int) core.RowID {
 	rowID := core.RowID{
 		RecordID:    uint32(id),
-		DataBlockID: uint16((id - 1) %  10),
+		DataBlockID: uint16((id - 1) % 10),
 		LocalID:     uint16((id - 1) % 100),
 	}
 	index.Add(uint32(id), rowID)
@@ -231,7 +231,7 @@ func assertIndexIncludesRowIDs(t *testing.T, index core.BTreeIndex, expectedRowI
 				break
 			}
 		}
-		if ! found {
+		if !found {
 			t.Fatalf("Did not find %+v on the index", rowID)
 		}
 	}
@@ -370,7 +370,7 @@ func indexDebugLeaf(index core.BTreeIndex, indent string, leaf core.BTreeLeaf) s
 	for _, entry := range leaf.All() {
 		keys = append(keys, entry.RecordID)
 	}
-	return fmt.Sprintf(indent + "LEAF %+v\n", keys)
+	return fmt.Sprintf(indent+"LEAF %+v\n", keys)
 }
 
 func indexDebugBranch(index core.BTreeIndex, indent string, branch core.BTreeBranch) string {
@@ -388,4 +388,3 @@ func indexDebugBranch(index core.BTreeIndex, indent string, branch core.BTreeBra
 	output += indexDebugNode(index, childIndent, gteNode)
 	return output
 }
-
