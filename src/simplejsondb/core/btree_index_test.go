@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+var testRepo core.DataBlockRepository
+
 func TestBTreeIndex_LeafRootNode(t *testing.T) {
 	branchCapacity := 10
 	leafCapacity := 8
@@ -114,14 +116,16 @@ func TestBTreeIndex_BranchRootSplitOnBranchesAndMergeBack(t *testing.T) {
 
 	// Remove all of the records we have just inserted and collapse the tree
 	// into a leaf node again
-	assertIndexCanRemoveN(t, index, totalEntries)
+	indexDebug(index)
+	// assertIndexCanRemoveN(t, index, totalEntries)
+	// log.SetLevel(log.WarnLevel)
 	// Ensure we can't load the records anymore
-	assertIndexFindErrorN(t, index, totalEntries)
+	// assertIndexFindErrorN(t, index, totalEntries)
 
 	// Ensure things got restored to a state that the tree can be used again
 	// assertIndexCanAddAndFindN(t, index, totalEntries)
-	// // Ensure we can deal with removing entries from right to left
-	// assertIndexCanRemoveReverseRange(t, index, uint32(1), uint32(totalEntries))
+	// Ensure we can deal with removing entries from right to left
+	// assertIndexCanRemoveReverseRange(t, index, 1, totalEntries)
 
 	// // What about removing chunks of keys
 	// assertIndexCanAddAndFindN(t, index, totalEntries)
@@ -142,9 +146,9 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchC
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
-	repo := core.NewDataBlockRepository(dataBuffer)
+	testRepo = core.NewDataBlockRepository(dataBuffer)
 
-	controlBlock := repo.ControlBlock()
+	controlBlock := testRepo.ControlBlock()
 	controlBlock.Format()
 	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 	rootBlock, err := dataBuffer.FetchBlock(controlBlock.BTreeRootBlock())
@@ -154,12 +158,12 @@ func createTestBTreeIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchC
 	indexRoot := core.CreateBTreeLeaf(rootBlock)
 	dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
 
-	blockMap := repo.DataBlocksMap()
+	blockMap := testRepo.DataBlocksMap()
 	for i := uint16(0); i < 5; i++ {
 		blockMap.MarkAsUsed(i)
 	}
 
-	return core.NewBTreeIndex(dataBuffer, repo, uint16(leafCapacity), uint16(branchCapacity))
+	return core.NewBTreeIndex(dataBuffer, testRepo, uint16(leafCapacity), uint16(branchCapacity))
 }
 
 func assertIndexFindErrorN(t *testing.T, index core.BTreeIndex, totalRecords int) {
@@ -267,3 +271,44 @@ func assertIndexCanRemoveReverseRange(t *testing.T, index core.BTreeIndex, first
 		t.Fatalf("Invalid data on index! before=%d, after=%d, firstid=%d, lastid=%d", totalBefore, totalAfter, firstID, lastID)
 	}
 }
+
+func indexDebug(index core.BTreeIndex) {
+	controlBlock := testRepo.ControlBlock()
+	root := testRepo.BTreeNode(controlBlock.BTreeRootBlock())
+
+	fmt.Print(indexDebugNode(index, "", root))
+}
+
+func indexDebugNode(index core.BTreeIndex, indent string, node core.BTreeNode) string {
+	if leafRoot, isLeaf := node.(core.BTreeLeaf); isLeaf {
+		return indexDebugLeaf(index, indent, leafRoot)
+	} else {
+		branchRoot, _ := node.(core.BTreeBranch)
+		return indexDebugBranch(index, indent, branchRoot)
+	}
+}
+
+func indexDebugLeaf(index core.BTreeIndex, indent string, leaf core.BTreeLeaf) string {
+	keys := []uint32{}
+	for _, entry := range leaf.All() {
+		keys = append(keys, entry.RecordID)
+	}
+	return fmt.Sprintf(indent + "LEAF %+v\n", keys)
+}
+
+func indexDebugBranch(index core.BTreeIndex, indent string, branch core.BTreeBranch) string {
+	entries := branch.All()
+
+	output := fmt.Sprintf(indent + "BRANCH\n")
+	indent += " "
+	for _, entry := range entries {
+		ltNode := testRepo.BTreeNode(entry.LtBlockID)
+		childIndent := fmt.Sprintf("%s [< %d]", indent, entry.SearchKey)
+		output += indexDebugNode(index, childIndent, ltNode)
+	}
+	gteNode := testRepo.BTreeNode(entries[len(entries)-1].GteBlockID)
+	childIndent := fmt.Sprintf("%s [>=%d]", indent, entries[len(entries)-1].SearchKey)
+	output += indexDebugNode(index, childIndent, gteNode)
+	return output
+}
+

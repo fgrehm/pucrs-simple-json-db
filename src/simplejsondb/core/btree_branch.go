@@ -8,11 +8,16 @@ import (
 
 type BTreeBranch interface {
 	BTreeNode
-	Add(searchKey uint32, leftNode, rightNode BTreeNode)
+	Add(SearchKey uint32, leftNode, rightNode BTreeNode)
+	// TODO: Append should be the only way to add nodes to a branch, the add above is just for creation
+	Append(searchKey uint32, rightNode BTreeNode)
 	Remove(searchKey uint32)
+	Shift() BTreeBranchEntry
+	Pop() BTreeBranchEntry
 	ReplaceKey(oldValue, newValue uint32)
 	Find(searchKey uint32) uint16
-	Pop() uint32
+	All() []BTreeBranchEntry
+	FirstEntry() BTreeBranchEntry
 }
 
 const (
@@ -27,11 +32,11 @@ type bTreeBranch struct {
 	*bTreeNode
 }
 
-type bTreeBranchEntry struct {
+type BTreeBranchEntry struct {
 	startsAt   uint16
-	searchKey  uint32
-	gteBlockID uint16
-	ltBlockID  uint16
+	SearchKey  uint32
+	GteBlockID uint16
+	LtBlockID  uint16
 }
 
 func CreateBTreeBranch(block *dbio.DataBlock) BTreeBranch {
@@ -48,14 +53,14 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 		return 0
 	}
 
-	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
+	if lastEntry := b.lastEntry(); searchKey >= lastEntry.SearchKey {
 		log.Infof("IDX_BRANCH_FIND_LAST entry=%+v", lastEntry)
-		return lastEntry.gteBlockID
+		return lastEntry.GteBlockID
 	}
 
-	if firstEntry := b.firstEntry(); searchKey < firstEntry.searchKey {
+	if firstEntry := b.FirstEntry(); searchKey < firstEntry.SearchKey {
 		log.Infof("IDX_BRANCH_FIND_FIRST entry=%+v", firstEntry)
-		return firstEntry.ltBlockID
+		return firstEntry.LtBlockID
 	}
 
 	// XXX: Should we perform a binary search here?
@@ -103,6 +108,21 @@ func (b *bTreeBranch) Add(searchKey uint32, leftNode, rightNode BTreeNode) {
 	b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount))
 }
 
+func (b *bTreeBranch) Append(searchKey uint32, rightNode BTreeNode) {
+	log.Infof("IDX_BRANCH_APPEND blockID=%d, searchKey=%d, rightID=%d", b.block.ID, searchKey, rightNode.DataBlockID())
+
+	entriesCount := b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+
+	// Since we always insert keys in order, we always append the values at the
+	// end of the node
+	initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (entriesCount * BTREE_BRANCH_ENTRY_JUMP))
+	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_KEY, searchKey)
+	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID, rightNode.DataBlockID())
+
+	entriesCount += 1
+	b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount))
+}
+
 func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
@@ -115,14 +135,14 @@ func (b *bTreeBranch) ReplaceKey(oldValue, newValue uint32) {
 		return
 	}
 
-	if lastEntry := b.lastEntry(); oldValue >= lastEntry.searchKey {
-		log.Infof("IDX_BRANCH_REPLACE_KEY on last entry %d", lastEntry.searchKey)
+	if lastEntry := b.lastEntry(); oldValue >= lastEntry.SearchKey {
+		log.Infof("IDX_BRANCH_REPLACE_KEY on last entry %d", lastEntry.SearchKey)
 		b.block.Write(int(lastEntry.startsAt+BTREE_BRANCH_OFFSET_KEY), newValue)
 		return
 	}
 
-	if firstEntry := b.firstEntry(); oldValue <= firstEntry.searchKey {
-		log.Infof("IDX_BRANCH_REPLACE_KEY on first entry %d", firstEntry.searchKey)
+	if firstEntry := b.FirstEntry(); oldValue <= firstEntry.SearchKey {
+		log.Infof("IDX_BRANCH_REPLACE_KEY on first entry %d", firstEntry.SearchKey)
 		b.block.Write(int(firstEntry.startsAt+BTREE_BRANCH_OFFSET_KEY), newValue)
 		return
 	}
@@ -155,8 +175,8 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 	}
 
 	// If we are removing the last key, just update the entries count and call it a day
-	if lastEntry := b.lastEntry(); searchKey >= lastEntry.searchKey {
-		log.Infof("IDX_BRANCH_REMOVE_LAST keyFound=%d, searchKey=%d, ptr=%d", lastEntry.searchKey, searchKey, lastEntry.startsAt)
+	if lastEntry := b.lastEntry(); searchKey >= lastEntry.SearchKey {
+		log.Infof("IDX_BRANCH_REMOVE_LAST keyFound=%d, searchKey=%d, ptr=%d", lastEntry.SearchKey, searchKey, lastEntry.startsAt)
 		b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount-1))
 		return
 	}
@@ -204,29 +224,59 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 	}
 }
 
-func (b *bTreeBranch) Pop() uint32 {
+func (b *bTreeBranch) Pop() BTreeBranchEntry {
+	if b.EntriesCount() == 0 {
+		panic("Called Shift() on a leaf that has no entries")
+	}
 	lastEntry := b.lastEntry()
-	b.Remove(lastEntry.searchKey)
-	return lastEntry.searchKey
+	b.Remove(lastEntry.SearchKey)
+	return lastEntry
 }
 
-func (b *bTreeBranch) firstEntry() bTreeBranchEntry {
+func (b *bTreeBranch) Shift() BTreeBranchEntry {
+	if b.EntriesCount() == 0 {
+		panic("Called Shift() on a leaf that has no entries")
+	}
+	firstEntry := b.FirstEntry()
+	b.Remove(firstEntry.SearchKey)
+	return firstEntry
+}
+
+func (b *bTreeBranch) FirstEntry() BTreeBranchEntry {
 	offset := int(BTREE_POS_ENTRIES_OFFSET)
-	return bTreeBranchEntry{
+	return BTreeBranchEntry{
 		startsAt:   uint16(offset),
-		searchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
-		ltBlockID:  b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
-		gteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
+		SearchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
+		LtBlockID:  b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
+		GteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
 	}
 }
 
-func (b *bTreeBranch) lastEntry() bTreeBranchEntry {
+func (b *bTreeBranch) All() []BTreeBranchEntry {
+	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+	entries := make([]BTreeBranchEntry, 0, entriesCount)
+
+	offset := BTREE_POS_ENTRIES_OFFSET
+	for i := 0; i < entriesCount; i++ {
+		entries = append(entries, BTreeBranchEntry{
+			startsAt:   uint16(offset),
+			SearchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
+			LtBlockID:  b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
+			GteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
+		})
+		offset += BTREE_BRANCH_ENTRY_JUMP
+	}
+
+	return entries
+}
+
+func (b *bTreeBranch) lastEntry() BTreeBranchEntry {
 	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 	offset := int(BTREE_POS_ENTRIES_OFFSET) + (entriesCount-1)*BTREE_BRANCH_ENTRY_JUMP
-	return bTreeBranchEntry{
+	return BTreeBranchEntry{
 		startsAt:   uint16(offset),
-		searchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
-		ltBlockID:  b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
-		gteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
+		SearchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),
+		LtBlockID:  b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID),
+		GteBlockID: b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID),
 	}
 }
