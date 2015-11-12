@@ -106,7 +106,7 @@ func (db *dataBuffer) evictOldestFrame() error {
 	id := db.nextVictims[0]
 	frame := db.idToFrame[id]
 
-	log.Infof("EVICT blockid=%d, dirty=%t", id, frame.isDirty)
+	log.Debugf("EVICT blockid=%d, dirty=%t", id, frame.isDirty)
 	if frame.isDirty {
 		if err := db.df.WriteBlock(id, frame.data); err != nil {
 			return err

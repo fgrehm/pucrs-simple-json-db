@@ -8,9 +8,9 @@ type DataBlockRepository interface {
 	ControlBlock() ControlBlock
 	DataBlocksMap() DataBlocksMap
 	RecordBlock(blockID uint16) RecordBlock
-	BTreeNode(blockID uint16) BTreeNode
-	BTreeBranch(blockID uint16) BTreeBranch
-	BTreeLeaf(blockID uint16) BTreeLeaf
+	// BTreeNode(blockID uint16) BTreeNode
+	// BTreeBranch(blockID uint16) BTreeBranch
+	// BTreeLeaf(blockID uint16) BTreeLeaf
 }
 
 type dataBlockRepository struct {
@@ -33,22 +33,22 @@ func (r *dataBlockRepository) RecordBlock(blockID uint16) RecordBlock {
 	return &recordBlock{r.fetchBlock(blockID)}
 }
 
-func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
-	node := &bTreeNode{r.fetchBlock(blockID)}
-	if node.IsLeaf() {
-		return &bTreeLeaf{node}
-	} else {
-		return &bTreeBranch{node}
-	}
-}
-
-func (r *dataBlockRepository) BTreeBranch(blockID uint16) BTreeBranch {
-	return &bTreeBranch{&bTreeNode{r.fetchBlock(blockID)}}
-}
-
-func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {
-	return &bTreeLeaf{&bTreeNode{r.fetchBlock(blockID)}}
-}
+// func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
+// 	node := &bTreeNode{r.fetchBlock(blockID)}
+// 	if node.IsLeaf() {
+// 		return &bTreeLeaf{node}
+// 	} else {
+// 		return &bTreeBranch{node}
+// 	}
+// }
+//
+// func (r *dataBlockRepository) BTreeBranch(blockID uint16) BTreeBranch {
+// 	return &bTreeBranch{&bTreeNode{r.fetchBlock(blockID)}}
+// }
+//
+// func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {
+// 	return &bTreeLeaf{&bTreeNode{r.fetchBlock(blockID)}}
+// }
 
 func (r *dataBlockRepository) fetchBlock(blockID uint16) *dbio.DataBlock {
 	block, err := r.buffer.FetchBlock(blockID)

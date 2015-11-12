@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	jsondb "simplejsondb"
-	"simplejsondb/core"
+	// "simplejsondb/core"
 	"simplejsondb/dbio"
 
 	utils "test_utils"
@@ -52,8 +52,8 @@ func TestSimpleJSONDB_InitializesDataFile(t *testing.T) {
 		}
 	}
 
-	if bTreeRootBlock[0] != core.BTREE_TYPE_LEAF {
-		println(bTreeRootBlock[0])
-		t.Error("Did not initialize the root node of the btree index as a leaf node")
-	}
+	// if bTreeRootBlock[0] != core.BTREE_TYPE_LEAF {
+	// 	println(bTreeRootBlock[0])
+	// 	t.Error("Did not initialize the root node of the btree index as a leaf node")
+	// }
 }

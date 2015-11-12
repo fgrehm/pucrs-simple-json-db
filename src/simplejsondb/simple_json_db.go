@@ -47,12 +47,12 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 		controlBlock.Format()
 		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
-		rootBlock, err := dataBuffer.FetchBlock(controlBlock.BTreeRootBlock())
-		if err != nil {
-			return nil, err
-		}
-		indexRoot := core.CreateBTreeLeaf(rootBlock)
-		dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
+		// rootBlock, err := dataBuffer.FetchBlock(controlBlock.BTreeRootBlock())
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// indexRoot := core.CreateBTreeLeaf(rootBlock)
+		// dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
 
 		blockMap := repo.DataBlocksMap()
 		// REFACTOR: This 5 should be calculated somehow
