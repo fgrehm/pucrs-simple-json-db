@@ -124,7 +124,7 @@ func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 		return nil, err
 	}
 
-	return core.NewRecordFinder(db.buffer).Find(rowID)
+	return core.NewRecordFinder(db.buffer).Find(id, rowID)
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
@@ -137,7 +137,7 @@ func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
 		rb := repo.RecordBlock(blockID)
 		for i, id := range rb.IDs() {
 			if id == needle {
-				return core.RowID{RecordID: needle, DataBlockID: blockID, LocalID: uint16(i)}, nil
+				return core.RowID{DataBlockID: blockID, LocalID: uint16(i)}, nil
 			}
 		}
 

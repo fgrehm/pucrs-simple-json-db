@@ -256,7 +256,6 @@ func (rb *recordBlock) ChainedRowID(localID uint16) (RowID, error) {
 	}
 
 	return RowID{
-		RecordID:    rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID),
 		DataBlockID: rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_BLOCK_ID),
 		LocalID:     rb.block.ReadUint16(headerPtr + HEADER_OFFSET_CHAINED_ROW_LOCAL_ID),
 	}, nil

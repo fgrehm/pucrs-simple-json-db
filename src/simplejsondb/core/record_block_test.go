@@ -166,7 +166,7 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	}
 
 	localID := rb.Add(uint32(14), []byte("NNNNNNNNNN"))
-	chainedID := RowID{RecordID: 14, DataBlockID: 1, LocalID: 2}
+	chainedID := RowID{DataBlockID: 1, LocalID: 2}
 	if err := rb.SetChainedRowID(localID, chainedID); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestRecordBlock_ChainedRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rowID != (RowID{RecordID: 15}) {
+	if rowID.LocalID != localID {
 		t.Fatalf("Invalid chained row ID found, %+v", rowID)
 	}
 }

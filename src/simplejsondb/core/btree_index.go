@@ -68,7 +68,7 @@ func (idx *bTreeIndex) Find(searchKey uint32) (RowID, error) {
 
 	if leaf != nil {
 		log.Printf("IDX_FIND_ON_LEAF_ROOT blockID=%d", leaf.DataBlockID())
-		rowID = leaf.Find(searchKey)
+		rowID = leaf.Find(searchKey).RowID
 	}
 
 	if rowID == (RowID{}) {

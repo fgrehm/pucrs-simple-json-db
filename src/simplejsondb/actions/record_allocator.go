@@ -65,7 +65,6 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 
 	ra.buffer.MarkAsDirty(insertBlockID)
 	return core.RowID{
-		RecordID:    record.ID,
 		DataBlockID: insertBlockID,
 		LocalID:     localID,
 	}, nil
@@ -113,7 +112,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock c
 		}
 		nextLocalID := recordBlock.Add(recordID, data[0:bytesToWrite])
 		ra.buffer.MarkAsDirty(recordBlock.DataBlockID())
-		nextRowID := core.RowID{RecordID: recordID, DataBlockID: recordBlock.DataBlockID(), LocalID: nextLocalID}
+		nextRowID := core.RowID{DataBlockID: recordBlock.DataBlockID(), LocalID: nextLocalID}
 
 		// And wire up the chain
 		prevBlock.SetChainedRowID(prevLocalID, nextRowID)
@@ -227,7 +226,7 @@ func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
 }
 
 func (ra *recordAllocator) Update(rowID core.RowID, record *core.Record) error {
-	log.Infof("UPDATE recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
+	log.Infof("UPDATE rowID='%d:%d'", rowID.DataBlockID, rowID.LocalID)
 
 	rb := ra.repo.RecordBlock(rowID.DataBlockID)
 	chainedID, err := rb.ChainedRowID(rowID.LocalID)

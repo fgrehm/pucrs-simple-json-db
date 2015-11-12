@@ -185,11 +185,11 @@ func TestRecordAllocator_Update(t *testing.T) {
 	allocator.Add(&core.Record{2, "Some data"})
 
 	// Update records
-	rowID := core.RowID{RecordID: 1, DataBlockID: 3, LocalID: 0}
+	rowID := core.RowID{DataBlockID: 3, LocalID: 0}
 	if err := allocator.Update(rowID, &core.Record{ID: 1, Data: "NEW CONTENTS"}); err != nil {
 		t.Fatal(err)
 	}
-	rowID = core.RowID{RecordID: 2, DataBlockID: 4, LocalID: 0}
+	rowID = core.RowID{DataBlockID: 4, LocalID: 0}
 	if err := allocator.Update(rowID, &core.Record{ID: 2, Data: "EVEN MORE!"}); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	}
 
 	// Change record to be really small
-	allocator.Update(chainedUpdateRowID, &core.Record{ID: chainedUpdateRowID.RecordID, Data: "a string"})
+	allocator.Update(chainedUpdateRowID, &core.Record{ID: uint32(9), Data: "a string"})
 
 	// Ensure the next element on the chained row list got cleared
 	for _, rowID := range rowIDs {

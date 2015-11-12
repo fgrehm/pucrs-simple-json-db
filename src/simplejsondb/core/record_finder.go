@@ -6,7 +6,7 @@ import (
 )
 
 type RecordFinder interface {
-	Find(rowID RowID) (*Record, error)
+	Find(id uint32, rowID RowID) (*Record, error)
 }
 
 type recordFinder struct {
@@ -17,11 +17,11 @@ func NewRecordFinder(buffer dbio.DataBuffer) RecordFinder {
 	return &recordFinder{buffer}
 }
 
-func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
+func (rf *recordFinder) Find(id uint32, rowID RowID) (*Record, error) {
 	repo := NewDataBlockRepository(rf.buffer)
 	rb := repo.RecordBlock(rowID.DataBlockID)
 
-	log.Infof("FIND_RECORD recordid=%d, rowid='%d:%d'", rowID.RecordID, rowID.DataBlockID, rowID.LocalID)
+	log.Infof("FIND_RECORD recordID=%d, rowID='%d:%d'", id, rowID.DataBlockID, rowID.LocalID)
 	data, err := rb.ReadRecordData(rowID.LocalID)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 
 	for chainedRowID.DataBlockID != 0 {
 		rb = repo.RecordBlock(chainedRowID.DataBlockID)
-		log.Infof("GET_CHAINED recordid=%d, chainedrowid='%d:%d'", rowID.RecordID, chainedRowID.DataBlockID, chainedRowID.LocalID)
+		log.Infof("GET_CHAINED recordID=%d, chainerRowID='%d:%d'", id, chainedRowID.DataBlockID, chainedRowID.LocalID)
 		chainedData, err := rb.ReadRecordData(chainedRowID.LocalID)
 		if err != nil {
 			return nil, err
@@ -45,5 +45,5 @@ func (rf *recordFinder) Find(rowID RowID) (*Record, error) {
 		}
 	}
 
-	return &Record{ID: rowID.RecordID, Data: data}, nil
+	return &Record{ID: id, Data: data}, nil
 }
