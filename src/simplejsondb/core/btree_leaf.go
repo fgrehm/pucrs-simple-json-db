@@ -11,10 +11,11 @@ type BTreeLeaf interface {
 	BTreeNode
 	Add(searchKey uint32, rowID RowID)
 	Remove(searchKey uint32)
-	Shift() RowID
-	Find(searchKey uint32) RowID
-	First() RowID
-	All() []RowID
+	Shift() BTreeLeafEntry
+	Pop() BTreeLeafEntry
+	Find(searchKey uint32) BTreeLeafEntry
+	First() BTreeLeafEntry
+	All() []BTreeLeafEntry
 	IsFull() bool
 }
 
@@ -30,6 +31,11 @@ type bTreeLeaf struct {
 	*bTreeNode
 }
 
+type BTreeLeafEntry struct {
+	SearchKey uint32
+	RowID     RowID
+}
+
 func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 	block.Write(BTREE_POS_TYPE, BTREE_TYPE_LEAF)
 	node := &bTreeNode{block}
@@ -37,7 +43,7 @@ func CreateBTreeLeaf(block *dbio.DataBlock) BTreeLeaf {
 }
 
 func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
-	entriesCount := l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+	entriesCount := l.EntriesCount()
 
 	addPosition := sort.Search(int(entriesCount), func(i int) bool {
 		offset := int(BTREE_POS_ENTRIES_OFFSET) + int(i)*int(BTREE_LEAF_ENTRY_SIZE)
@@ -57,33 +63,32 @@ func (l *bTreeLeaf) Add(searchKey uint32, rowID RowID) {
 	entriesCount += 1
 	l.block.Write(BTREE_POS_ENTRIES_COUNT, entriesCount)
 
-	log.Infof("IDX_LEAF_ADDED blockID=%d, searchKey=%d, position=%d, entriesCount=%d, rowID=%+v", l.block.ID, searchKey, addPosition, entriesCount, rowID)
+	log.Infof("IDX_LEAF_ADDED blockID=%d, searchKey=%d, position=%d, entriesCount=%d, writeOffset=%d, rowID=%+v", l.block.ID, searchKey, addPosition, entriesCount, writeOffset, rowID)
 }
 
-func (l *bTreeLeaf) Find(searchKey uint32) RowID {
-	log.Debugf("LEAF_FIND blockid=%d, searchkey=%d", l.block.ID, searchKey)
-	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+func (l *bTreeLeaf) Find(searchKey uint32) BTreeLeafEntry {
+	log.Debugf("LEAF_FIND blockID=%d, searchKey=%d", l.block.ID, searchKey)
 
-	// XXX: Should we perform a binary search here?
-	for i := 0; i < entriesCount; i++ {
-		ptr := int(BTREE_POS_ENTRIES_OFFSET + (i * BTREE_LEAF_ENTRY_SIZE))
-		keyFound := l.block.ReadUint32(ptr + BTREE_LEAF_OFFSET_KEY)
-		if keyFound != searchKey {
-			continue
-		}
-		return RowID{
-			RecordID:    searchKey,
-			DataBlockID: l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_BLOCK_ID),
-			LocalID:     l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_LOCAL_ID),
-		}
+	entries := l.All()
+	readPosition := sort.Search(len(entries), func(i int) bool {
+		return entries[i].SearchKey >= searchKey
+	})
+	if readPosition >= len(entries) {
+		return BTreeLeafEntry{}
 	}
-	return RowID{}
+
+	entry := entries[readPosition]
+	if entry.SearchKey != searchKey {
+		return BTreeLeafEntry{}
+	}
+
+	return entry
 }
 
 func (l *bTreeLeaf) Remove(searchKey uint32) {
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
 
-	log.Debugf("LEAF_REMOVE blockid=%d, searchkey=%d, entriescount=%d", l.block.ID, searchKey, entriesCount)
+	log.Infof("LEAF_REMOVE blockid=%d, searchkey=%d, entriescount=%d", l.block.ID, searchKey, entriesCount)
 
 	// TODO: Shortcut remove on last entry
 
@@ -121,43 +126,65 @@ func (l *bTreeLeaf) Remove(searchKey uint32) {
 	}
 }
 
-func (l *bTreeLeaf) First() RowID {
-	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+func (l *bTreeLeaf) First() BTreeLeafEntry {
+	entriesCount := l.EntriesCount()
 	if entriesCount == 0 {
 		panic("Called First() on a leaf that has no entries")
 	}
 	ptr := int(BTREE_POS_ENTRIES_OFFSET)
-	return RowID{
-		RecordID:    l.block.ReadUint32(ptr + BTREE_LEAF_OFFSET_KEY),
-		DataBlockID: l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_BLOCK_ID),
-		LocalID:     l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_LOCAL_ID),
-	}
+	return l.readEntry(ptr)
 }
 
-func (l *bTreeLeaf) Shift() RowID {
-	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+func (l *bTreeLeaf) Shift() BTreeLeafEntry {
+	entriesCount := l.EntriesCount()
 	if entriesCount == 0 {
 		panic("Called Shift() on a leaf that has no entries")
 	}
 	first := l.First()
-	l.Remove(first.RecordID)
+	l.Remove(first.SearchKey)
 	return first
 }
 
-func (l *bTreeLeaf) All() []RowID {
+func (l *bTreeLeaf) Last() BTreeLeafEntry {
+	entriesCount := l.EntriesCount()
+	if entriesCount == 0 {
+		panic("Called Last() on a leaf that has no entries")
+	}
+	ptr := int(BTREE_POS_ENTRIES_OFFSET) + int(entriesCount-1)*BTREE_LEAF_ENTRY_SIZE
+	return l.readEntry(ptr)
+}
+
+func (l *bTreeLeaf) Pop() BTreeLeafEntry {
+	entriesCount := l.EntriesCount()
+	if entriesCount == 0 {
+		panic("Called Pop() on a leaf that has no entries")
+	}
+	last := l.Last()
+	l.Remove(last.SearchKey)
+	return last
+}
+
+
+func (l *bTreeLeaf) All() []BTreeLeafEntry {
 	entriesCount := int(l.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
-	all := make([]RowID, 0, entriesCount)
+	all := make([]BTreeLeafEntry, 0, entriesCount)
 	for i := 0; i < entriesCount; i++ {
 		ptr := int(BTREE_POS_ENTRIES_OFFSET + (i * BTREE_LEAF_ENTRY_SIZE))
-		all = append(all, RowID{
-			RecordID:    l.block.ReadUint32(ptr + BTREE_LEAF_OFFSET_KEY),
-			DataBlockID: l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_BLOCK_ID),
-			LocalID:     l.block.ReadUint16(ptr + BTREE_LEAF_OFFSET_LOCAL_ID),
-		})
+		all = append(all, l.readEntry(ptr))
 	}
 	return all
 }
 
-func (n *bTreeLeaf) IsFull() bool {
-	return n.block.ReadUint16(BTREE_POS_ENTRIES_COUNT) == BTREE_LEAF_MAX_ENTRIES
+func (l *bTreeLeaf) IsFull() bool {
+	return l.EntriesCount() == BTREE_LEAF_MAX_ENTRIES
+}
+
+func (l bTreeLeaf) readEntry(entryOffset int) BTreeLeafEntry {
+	return BTreeLeafEntry {
+		SearchKey: l.block.ReadUint32(entryOffset + BTREE_LEAF_OFFSET_KEY),
+		RowID: RowID {
+			DataBlockID: l.block.ReadUint16(entryOffset + BTREE_LEAF_OFFSET_BLOCK_ID),
+			LocalID:     l.block.ReadUint16(entryOffset + BTREE_LEAF_OFFSET_LOCAL_ID),
+		},
+	}
 }

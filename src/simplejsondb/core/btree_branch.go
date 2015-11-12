@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"sort"
 	"simplejsondb/dbio"
 )
 
@@ -93,19 +94,27 @@ func (b *bTreeBranch) Find(searchKey uint32) uint16 {
 }
 
 func (b *bTreeBranch) Add(searchKey uint32, leftNode, rightNode BTreeNode) {
-	log.Infof("IDX_BRANCH_ADD blockid=%d, searchkey=%d, leftid=%d, rightid=%d", b.block.ID, searchKey, leftNode.DataBlockID(), rightNode.DataBlockID())
+	entriesCount := b.EntriesCount()
 
-	entriesCount := b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT)
+	addPosition := sort.Search(int(entriesCount), func(i int) bool {
+		offset := int(BTREE_POS_ENTRIES_OFFSET) + int(i)*int(BTREE_BRANCH_ENTRY_JUMP)
+		keyFound := b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY)
+		return keyFound >= searchKey
+	})
+	writeOffset := int(BTREE_POS_ENTRIES_OFFSET) + int(addPosition)*int(BTREE_BRANCH_ENTRY_JUMP)
+	if uint16(addPosition) < entriesCount && searchKey == b.block.ReadUint32(writeOffset+BTREE_BRANCH_OFFSET_KEY) {
+		panic(fmt.Sprintf("Duplicate key detected: %d", searchKey))
+	}
 
-	// Since we always insert keys in order, we always append the values at the
-	// end of the node
-	initialOffset := int(BTREE_POS_ENTRIES_OFFSET + (entriesCount * BTREE_BRANCH_ENTRY_JUMP))
-	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID, leftNode.DataBlockID())
-	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_KEY, searchKey)
-	b.block.Write(initialOffset+BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID, rightNode.DataBlockID())
+	b.block.Unshift(writeOffset+BTREE_BRANCH_OFFSET_KEY, BTREE_BRANCH_ENTRY_JUMP)
+	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID, leftNode.DataBlockID())
+	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_KEY, searchKey)
+	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID, rightNode.DataBlockID())
 
 	entriesCount += 1
 	b.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(entriesCount))
+
+	log.Infof("IDX_BRANCH_ADDED blockID=%d, searchKey=%d, position=%d, entriesCount=%d, writeOffset=%d, leftID=%d, rightID=%d", b.block.ID, searchKey, addPosition, entriesCount, writeOffset, leftNode.DataBlockID(), rightNode.DataBlockID())
 }
 
 func (b *bTreeBranch) Append(searchKey uint32, rightNode BTreeNode) {
@@ -215,7 +224,7 @@ func (b *bTreeBranch) Remove(searchKey uint32) {
 		entryToRemovePtr += BTREE_BRANCH_OFFSET_KEY
 	}
 
-	log.Infof("IDX_BRANCH_REMOVE_FIRST_PTR ptr=%d", entryToRemovePtr)
+	log.Infof("IDX_BRANCH_REMOVE ptr=%d", entryToRemovePtr)
 
 	// Copy data over
 	lastByteToOverwrite := int(BTREE_POS_ENTRIES_OFFSET) + entriesCount*BTREE_BRANCH_ENTRY_JUMP
@@ -253,11 +262,11 @@ func (b *bTreeBranch) FirstEntry() BTreeBranchEntry {
 }
 
 func (b *bTreeBranch) All() []BTreeBranchEntry {
-	entriesCount := int(b.block.ReadUint16(BTREE_POS_ENTRIES_COUNT))
+	entriesCount := b.EntriesCount()
 	entries := make([]BTreeBranchEntry, 0, entriesCount)
 
 	offset := BTREE_POS_ENTRIES_OFFSET
-	for i := 0; i < entriesCount; i++ {
+	for i := uint16(0); i < entriesCount; i++ {
 		entries = append(entries, BTreeBranchEntry{
 			startsAt:   uint16(offset),
 			SearchKey:  b.block.ReadUint32(offset + BTREE_BRANCH_OFFSET_KEY),

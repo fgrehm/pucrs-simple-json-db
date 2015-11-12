@@ -86,7 +86,7 @@ func (n *bTreeNode) RightSibling() uint16 {
 }
 
 func (n *bTreeNode) Reset() {
-	log.Debugf("RESET blockid=%d", n.block.ID)
+	log.Debugf("RESET blockID=%d", n.block.ID)
 	n.block.Write(BTREE_POS_ENTRIES_COUNT, uint16(0))
 	n.block.Write(BTREE_POS_PARENT_ID, uint16(0))
 	n.block.Write(BTREE_POS_LEFT_SIBLING, uint16(0))
