@@ -42,7 +42,7 @@ func TestBPlusTree_LeafRootSplit(t *testing.T) {
 	}
 }
 
-func TestBPlusTree_SplitLeavesAttachedToRoot(t *testing.T) {
+func TestBPlusTree_RightSplitLeavesAttachedToRoot(t *testing.T) {
 	tree := createTree(6, 4)
 	totalEntries := 7*2 + 1
 
@@ -55,6 +55,23 @@ func TestBPlusTree_SplitLeavesAttachedToRoot(t *testing.T) {
 	assertTreeCanListAllItemsInOrder(t, tree, items)
 
 	if len(adapter.nodes) != 8 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	}
+}
+
+func TestBPlusTree_LeftSplitLeavesAttachedToRoot(t *testing.T) {
+	tree := createTree(6, 4)
+	totalEntries := 7*2 + 1
+
+	items := []Item{}
+	for i := totalEntries-1; i >= 0; i-- {
+		_, item := assertTreeCanInsertAndFind(t, tree, i, fmt.Sprintf("item-%d", i))
+		items = append([]Item{item}, items...)
+	}
+
+	assertTreeCanListAllItemsInOrder(t, tree, items)
+
+	if len(adapter.nodes) != 6 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
 	}
 }
