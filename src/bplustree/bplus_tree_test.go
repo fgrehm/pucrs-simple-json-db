@@ -108,6 +108,50 @@ func TestBPlusTree_MaximizesUtilization(t *testing.T) {
 	}
 }
 
+func TestBPlusTree_LeafRootDelete(t *testing.T) {
+	tree := createTree(6, 4)
+	for i := 0; i < 4; i++ {
+		insertOnTree(tree, i, fmt.Sprintf("item-%d", i))
+	}
+	for i := 0; i < 4; i++ {
+		assertTreeCanDeleteByKey(t, tree, i)
+	}
+	for i := 0; i < 3; i++ {
+		assertTreeCantFindByKey(t, tree, i)
+	}
+	if len(adapter.nodes) != 1 {
+		t.Fatalf("Created an unexpected set of nodes, total=%d, expected=1", len(adapter.nodes))
+	}
+}
+
+func TestBPlusTree_RightMergeLeavesAttachedToRoot(t *testing.T) {
+	tree := createTree(6, 4)
+	for i := 0; i < 6*2; i++ {
+		insertOnTree(tree, i, fmt.Sprintf("item-%d", i))
+	}
+	for i := 0; i < 6*2; i++ {
+		assertTreeCanDeleteByKey(t, tree, i)
+	}
+
+	if len(adapter.nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
+	}
+}
+
+func TestBPlusTree_LeftMergeLeavesAttachedToRoot(t *testing.T) {
+	tree := createTree(6, 4)
+	for i := 0; i < 6*2; i++ {
+		insertOnTree(tree, i, fmt.Sprintf("item-%d", i))
+	}
+	for i := 6*2-1; i >= 0; i-- {
+		assertTreeCanDeleteByKey(t, tree, i)
+	}
+
+	if len(adapter.nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
+	}
+}
+
 func createTree(branchCapacity int, leafCapacity int) BPlusTree {
 	adapter = newInMemoryAdapter()
 	tree := New(Config{
@@ -118,23 +162,38 @@ func createTree(branchCapacity int, leafCapacity int) BPlusTree {
 	return tree
 }
 
-func assertTreeCanInsertAndFind(t *testing.T, tree BPlusTree, intKey int, stringItem string) (Uint32Key, StringItem) {
+func insertOnTree(tree BPlusTree, intKey int, stringItem string) {
 	key := Uint32Key(intKey)
 	item := StringItem(stringItem)
-
 	tree.Insert(key, item)
+}
 
-	itemFound, err := tree.Find(key)
+func assertTreeCanDeleteByKey(t *testing.T, tree BPlusTree, intKey int) {
+	key := Uint32Key(intKey)
+	tree.Delete(key)
+	assertTreeCantFindByKey(t, tree, intKey)
+}
+
+func assertTreeCantFindByKey(t *testing.T, tree BPlusTree, intKey int) {
+	key := Uint32Key(intKey)
+	if _, err := tree.Find(key); err == nil {
+		t.Error("Did not remove key from tree")
+	}
+}
+
+func assertTreeCanInsertAndFind(t *testing.T, tree BPlusTree, intKey int, stringItem string) (Uint32Key, StringItem) {
+	insertOnTree(tree, intKey, stringItem)
+	itemFound, err := tree.Find(Uint32Key(intKey))
 	if err != nil {
-		t.Fatalf("Error when trying to find item with key=%+v: %s", key, err)
+		t.Fatalf("Error when trying to find item with key=%+v: %s", intKey, err)
 	}
 	if itemFound == nil {
-		t.Errorf("Could not retrieve %d from tree right after inserting it", key)
+		t.Errorf("Could not retrieve %d from tree right after inserting it", intKey)
 	}
-	if itemFound != item {
+	if itemFound != StringItem(stringItem) {
 		t.Errorf("Invalid value returned from the tree: %+v", itemFound)
 	}
-	return key, item
+	return Uint32Key(intKey), StringItem(stringItem)
 }
 
 func assertTreeCanListAllItemsInOrder(t *testing.T, tree BPlusTree, items []Item) {

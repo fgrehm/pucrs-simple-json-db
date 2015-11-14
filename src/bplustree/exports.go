@@ -5,7 +5,7 @@ type BPlusTree interface {
 	Insert(key Key, item Item) error
 	Find(key Key) (Item, error)
 	All(iterator LeafEntriesIterator) error
-	// DeleteAt(key Key) error
+	Delete(key Key) error
 }
 
 type Key interface {
@@ -30,6 +30,7 @@ type LeafNode interface {
 	Node
 	InsertAt(position int, entry LeafEntry)
 	ItemAt(position int) Item
+	DeleteAt(position int) LeafEntry
 	DeleteFrom(position int) LeafEntries
 	All(iterator LeafEntriesIterator) error
 }
@@ -44,8 +45,10 @@ type BranchNode interface {
 	Node
 	InsertAt(position int, key Key, greaterThanOrEqualToKeyNodeID NodeID)
 	EntryAt(position int) BranchEntry
+	DeleteAt(position int)
 	DeleteFrom(position int) BranchEntries
-	// ReplaceKey(oldKey, newKey Key)
+	Shift()
+	ReplaceKeyAt(position int, newKey Key)
 	All(BranchEntriesIterator) error
 }
 type BranchEntries []BranchEntry
@@ -62,44 +65,10 @@ type NodeAdapter interface {
 	Init() LeafNode
 	SetRoot(node Node)
 	LoadNode(id NodeID) Node
+	Free(node Node)
 	CreateBranch(entry BranchEntry) BranchNode
 	LoadBranch(id NodeID) BranchNode
 	LoadFirstLeaf() LeafNode
 	CreateLeaf() LeafNode
 	LoadLeaf(id NodeID) LeafNode
 }
-
-// type BPlusTree interface {
-// 	Delete(key Key)
-// 	All(iterator ItemIterator)
-// 	Height() int
-// }
-//
-// type NodeAdapter interface {
-// 	CreateBranch() BranchNode
-// 	GetBranch(id NodeID) BranchNode
-// 	CreateLeaf() LeafNode
-// 	GetLeaf(id NodeID) LeafNode
-// }
-//
-// type BranchNode interface {
-// 	Node
-// 	Append(key Key, gteChildID NodeID)
-// 	Delete(key Key)
-// 	ReplaceKey(oldKey, newKey Key)
-// 	Search(key Key) BranchEntry
-// 	All() []BranchEntry
-// 	LeftSibling() BranchNode
-// 	RightSibling() BranchNode
-// }
-//
-// type BTreeBranchEntry struct {
-// 	SearchKey                      Key
-// 	LowerThanKeyChildID            NodeID
-// 	GreaterThanOrEqualToKeyChildID NodeID
-// }
-//
-// type BTreeBranchEntry struct {
-// 	SearchKey Key
-// 	Item      Item
-// }

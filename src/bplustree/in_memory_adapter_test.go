@@ -45,6 +45,7 @@ type inMemoryBranch struct {
 
 func (a *InMemoryAdapter) SetRoot(node bplustree.Node) {
 	a.rootID = node.ID().(Uint16ID)
+	node.SetParentID(Uint16ID(0))
 }
 
 func (a *InMemoryAdapter) Init() bplustree.LeafNode {
@@ -62,10 +63,6 @@ func (a *InMemoryAdapter) LoadRoot() bplustree.Node {
 	return a.nodes[a.rootID]
 }
 
-func (a *InMemoryAdapter) LoadFirstLeaf() bplustree.LeafNode {
-	return a.nodes[a.firstLeafID].(bplustree.LeafNode)
-}
-
 func (a *InMemoryAdapter) LoadNode(id bplustree.NodeID) bplustree.Node {
 	node := a.nodes[id.(Uint16ID)]
 	if node != nil {
@@ -73,6 +70,14 @@ func (a *InMemoryAdapter) LoadNode(id bplustree.NodeID) bplustree.Node {
 	} else {
 		return nil
 	}
+}
+
+func (a *InMemoryAdapter) Free(node bplustree.Node) {
+	delete(a.nodes, node.ID().(Uint16ID))
+}
+
+func (a *InMemoryAdapter) LoadFirstLeaf() bplustree.LeafNode {
+	return a.nodes[a.firstLeafID].(bplustree.LeafNode)
 }
 
 func (a *InMemoryAdapter) LoadBranch(id bplustree.NodeID) bplustree.BranchNode {
@@ -160,10 +165,16 @@ func (l *inMemoryLeaf) ItemAt(position int) bplustree.Item {
 	return l.entries[position].Item
 }
 
+func (l *inMemoryLeaf) DeleteAt(position int) bplustree.LeafEntry {
+	deleted := l.entries[position]
+	l.entries = append(l.entries[:position], l.entries[position+1:]...)
+	return deleted
+}
+
 func (l *inMemoryLeaf) DeleteFrom(startPosition int) bplustree.LeafEntries {
-	removed := l.entries[startPosition:]
+	deleted := l.entries[startPosition:]
 	l.entries = l.entries[0:startPosition]
-	return removed
+	return deleted
 }
 
 func (l *inMemoryLeaf) All(iterator bplustree.LeafEntriesIterator) error {
@@ -218,10 +229,29 @@ func (b *inMemoryBranch) Append(key bplustree.Key, gteNodeID bplustree.NodeID) {
 	b.entries = append(b.entries, entry)
 }
 
+func (l *inMemoryBranch) DeleteAt(position int) {
+	if position == len(l.entries) - 1 {
+		l.entries = l.entries[0:position]
+	} else {
+		l.entries[position+1].LowerThanKeyNodeID = l.entries[position-1].GreaterThanOrEqualToKeyNodeID
+		l.entries = append(l.entries[:position], l.entries[position+1:]...)
+	}
+}
+
+func (b *inMemoryBranch) ReplaceKeyAt(position int, key bplustree.Key) {
+	b.entries[position].Key = key
+}
+
 func (b *inMemoryBranch) DeleteFrom(startPosition int) bplustree.BranchEntries {
 	removed := b.entries[startPosition:]
 	b.entries = b.entries[0:startPosition]
 	return removed
+}
+
+func (b *inMemoryBranch) Shift() {
+	ltNodeID := b.entries[0].LowerThanKeyNodeID
+	b.entries = b.entries[1:]
+	b.entries[0].LowerThanKeyNodeID = ltNodeID
 }
 
 func (b *inMemoryBranch) TotalKeys() int {

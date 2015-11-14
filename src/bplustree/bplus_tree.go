@@ -52,6 +52,133 @@ func (t *bPlusTree) Insert(key Key, item Item) error {
 	return nil
 }
 
+func (t *bPlusTree) Delete(key Key) error {
+	var leaf LeafNode
+	root := t.adapter.LoadRoot()
+
+	if root == nil {
+		return errors.New("Not found")
+	}
+
+	if leafRoot, isLeaf := root.(LeafNode); isLeaf {
+		leaf = leafRoot
+	} else {
+		leaf = t.findLeafForKey(root.(BranchNode), key)
+	}
+
+	deletePosition, found := t.findOnNode(leaf, key)
+	if !found {
+		return errors.New("Not found")
+	}
+
+	t.deleteFromLeaf(leaf, deletePosition)
+	return nil
+}
+
+func (t *bPlusTree) deleteFromLeaf(leaf LeafNode, position int) {
+	leaf.DeleteAt(position)
+
+	if leaf.TotalKeys() >= t.halfLeafCapacity || t.adapter.IsRoot(leaf) {
+		return
+	}
+
+	// Try "borrowing" an item from the right
+	right := t.rightLeafSibling(leaf)
+	if right != nil && right.TotalKeys() > t.halfLeafCapacity {
+		t.pipeFromRightLeaf(right, leaf)
+		return
+	}
+
+	// Try "borrowing" an item from the left
+	left := t.leftLeafSibling(leaf)
+	if left != nil && left.TotalKeys() > t.halfLeafCapacity {
+		panic("CANT PIPE FROM LEFT")
+		// t.pipeKeyFromLeftLeaf(left, leaf)
+		return
+	}
+
+	// At this point we need to merge leaves, just need to figure out which one
+	var parentKeyCandidate Key
+	if right != nil {
+		left, parentKeyCandidate = t.mergeLeaves(leaf, right)
+	} else if left != nil {
+		left, parentKeyCandidate = t.mergeLeaves(left, leaf)
+	} else {
+		// This is unlikely to happen but who knows...
+		panic("Something weird happened")
+	}
+
+	parent := t.adapter.LoadBranch(left.ParentID())
+	if t.adapter.IsRoot(parent) && parent.TotalKeys() == 1 {
+		t.adapter.Free(parent)
+		t.adapter.SetRoot(left)
+		return
+	}
+
+	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
+	t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
+}
+
+func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
+	if position == 0 {
+		branch.Shift()
+	} else {
+		if position == branch.TotalKeys() {
+			position -= 1
+		}
+		branch.DeleteAt(position)
+	}
+
+	if branch.TotalKeys() >= t.halfBranchCapacity || t.adapter.IsRoot(branch) {
+		return
+	}
+
+	panic("CANT CASCADE BRANCH MERGES YET")
+}
+
+func (t *bPlusTree) rightLeafSibling(left LeafNode) LeafNode {
+	right := t.adapter.LoadLeaf(left.RightSiblingID())
+	if right == nil || left.ParentID() != right.ParentID() {
+		return nil
+	}
+	return right
+}
+
+func (t *bPlusTree) leftLeafSibling(right LeafNode) LeafNode {
+	left := t.adapter.LoadLeaf(right.LeftSiblingID())
+	if left == nil || right.ParentID() != left.ParentID() {
+		return nil
+	}
+	return left
+}
+
+func (t *bPlusTree) pipeFromRightLeaf(right, left LeafNode) {
+	firstFromRight := right.DeleteAt(0)
+	left.InsertAt(left.TotalKeys(), firstFromRight)
+
+	parent := t.adapter.LoadBranch(right.ParentID())
+	position, _ := t.findOnNode(parent, firstFromRight.Key)
+	parent.ReplaceKeyAt(position, right.KeyAt(0))
+}
+
+func (t *bPlusTree) mergeLeaves(left, right LeafNode) (LeafNode, Key) {
+	insertPosition := left.TotalKeys()
+	right.All(func (entry LeafEntry) {
+		left.InsertAt(insertPosition, entry)
+		insertPosition += 1
+	})
+	left.SetRightSiblingID(right.RightSiblingID())
+
+	newRight := t.rightLeafSibling(right)
+	if newRight != nil {
+		newRight.SetLeftSiblingID(left.ID())
+	}
+
+	middleKey := right.KeyAt(0)
+	t.adapter.Free(right)
+	return left, middleKey
+}
+
 func (t *bPlusTree) Find(key Key) (Item, error) {
 	var leaf LeafNode
 	root := t.adapter.LoadRoot()
