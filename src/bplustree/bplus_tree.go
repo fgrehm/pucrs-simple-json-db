@@ -92,8 +92,7 @@ func (t *bPlusTree) deleteFromLeaf(leaf LeafNode, position int) {
 	// Try "borrowing" an item from the left
 	left := t.leftLeafSibling(leaf)
 	if left != nil && left.TotalKeys() > t.halfLeafCapacity {
-		panic("CANT PIPE FROM LEFT")
-		// t.pipeKeyFromLeftLeaf(left, leaf)
+		t.pipeFromLeftLeaf(left, leaf)
 		return
 	}
 
@@ -159,6 +158,17 @@ func (t *bPlusTree) pipeFromRightLeaf(right, left LeafNode) {
 	parent := t.adapter.LoadBranch(right.ParentID())
 	position, _ := t.findOnNode(parent, firstFromRight.Key)
 	parent.ReplaceKeyAt(position, right.KeyAt(0))
+}
+
+func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
+	firstFromRight := right.KeyAt(0)
+
+	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
+	right.InsertAt(0, lastFromLeft)
+
+	parent := t.adapter.LoadBranch(right.ParentID())
+	position, _ := t.findOnNode(parent, firstFromRight)
+	parent.ReplaceKeyAt(position, lastFromLeft.Key)
 }
 
 func (t *bPlusTree) mergeLeaves(left, right LeafNode) (LeafNode, Key) {

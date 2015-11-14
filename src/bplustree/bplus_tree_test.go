@@ -141,6 +141,31 @@ func TestBPlusTree_LeafRootDelete(t *testing.T) {
 	}
 }
 
+func TestBPlusTree_PipeItemsFromLeafSiblings(t *testing.T) {
+	branchCapacity := 6
+	leafCapacity := 4
+	tree := createTree(branchCapacity, leafCapacity)
+	totalEntries := branchCapacity * leafCapacity/2
+
+	for i := 0; i < totalEntries/2; i++ {
+		key := i * 10
+		insertOnTree(tree, key, fmt.Sprintf("item-%d", key))
+	}
+	for i := 0; i < totalEntries/2; i++ {
+		key := i * 10 + 1
+		insertOnTree(tree, key, fmt.Sprintf("item-%d", key))
+	}
+
+	nodesCount := len(adapter.nodes)
+
+	assertTreeCanDeleteByKey(t, tree, 20)
+	assertTreeCanDeleteByKey(t, tree, 30)
+
+	if len(adapter.nodes) != nodesCount {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesCount)
+	}
+}
+
 func TestBPlusTree_RightMergeLeavesAttachedToRoot(t *testing.T) {
 	tree := createTree(6, 4)
 	for i := 0; i < 6*2; i++ {
