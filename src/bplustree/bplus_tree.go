@@ -165,19 +165,7 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
 
 	// REFACTOR: The code below looks the stuff above o_O
 	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
-	if deletePosition == 0 {
-		parent.Shift()
-	} else {
-		if deletePosition == parent.TotalKeys() {
-			deletePosition -= 1
-		}
-		parent.DeleteAt(deletePosition)
-	}
-
-	grandParent := t.adapter.LoadBranch(parent.ParentID())
-	if grandParent != nil {
-		panic("Delete key from grandparent")
-	}
+	t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
 }
 
 func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
@@ -218,9 +206,9 @@ func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
 	parent := t.adapter.LoadBranch(right.ParentID())
 
 	position, _ := t.findOnNode(parent, firstFromRight.Key)
-	leftKey := parent.KeyAt(position-1)
 	parent.ReplaceKeyAt(position-1, right.KeyAt(0))
 
+	leftKey := t.findMinimum(right)
 	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
 
 	child := t.adapter.LoadNode(firstFromRight.LowerThanKeyNodeID)
@@ -234,8 +222,7 @@ func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
 	position, _ := t.findOnNode(parent, lastFromLeft.Key)
 	parent.ReplaceKeyAt(position+1, lastFromLeft.Key)
 
-	newRightKeyNodeID := right.EntryAt(0).LowerThanKeyNodeID
-	rightKey := t.adapter.LoadNode(newRightKeyNodeID).KeyAt(0)
+	rightKey := t.findMinimum(right)
 	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
 
 	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
