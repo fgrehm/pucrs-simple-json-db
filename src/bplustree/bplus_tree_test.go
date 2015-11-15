@@ -344,6 +344,64 @@ func TestBPlusTree_LeftMergeBranches(t *testing.T) {
 	})
 }
 
+func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
+	branchCapacity := 4
+	leafCapacity := 4
+	tree := createTree(branchCapacity, leafCapacity)
+	totalEntries := (branchCapacity+1)*leafCapacity
+
+	for h := 0; h < 30; h++ {
+		if h % 2 == 0 {
+			for i := 0; i < totalEntries/2; i++ {
+				key := i * 50 + h
+				assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
+				var lastKey Key
+				tree.All(func (entry LeafEntry) {
+					if lastKey == nil {
+						lastKey = entry.Key
+					} else if entry.Key.Less(lastKey) {
+						t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
+					}
+					lastKey = entry.Key
+				})
+			}
+		} else {
+			for i := totalEntries/2+1; i < totalEntries; i++ {
+				key := i * 50 + h
+				assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
+				var lastKey Key
+				tree.All(func (entry LeafEntry) {
+					if lastKey == nil {
+						lastKey = entry.Key
+					} else if entry.Key.Less(lastKey) {
+						t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
+					}
+					lastKey = entry.Key
+				})
+			}
+		}
+		var lastKey Key
+		tree.All(func (entry LeafEntry) {
+			if lastKey == nil {
+				lastKey = entry.Key
+			} else if entry.Key.Less(lastKey) {
+				t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
+			}
+			lastKey = entry.Key
+		})
+		println("----------------")
+	}
+	var lastKey Key
+	tree.All(func (entry LeafEntry) {
+		if lastKey == nil {
+			lastKey = entry.Key
+		} else if entry.Key.Less(lastKey) {
+			t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
+		}
+		lastKey = entry.Key
+	})
+}
+
 func createTree(branchCapacity int, leafCapacity int) BPlusTree {
 	adapter = newInMemoryAdapter()
 	tree := New(Config{

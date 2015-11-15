@@ -446,17 +446,25 @@ func (t *bPlusTree) branchSplit(branch BranchNode, position int, key Key, greate
 		splitFrom -= 1
 	}
 	rightEntries := branch.DeleteFrom(splitFrom)
-	parentKey := rightEntries[0].Key
-	rightEntries = rightEntries[1:]
+
+	if position == -1 {
+		panic("Something weird is going on")
+	} else if position < t.halfBranchCapacity {
+		branch.InsertAt(position, key, greaterThanOrEqToKeyNode.ID())
+	}
+
+	if position == t.halfBranchCapacity {
+		rightEntries[0].LowerThanKeyNodeID = greaterThanOrEqToKeyNode.ID()
+	} else {
+		rightEntries = rightEntries[1:]
+	}
 
 	right := t.adapter.CreateBranch(rightEntries[0])
 	for i, entry := range rightEntries[1:] {
 		right.InsertAt(i+1, entry.Key, entry.GreaterThanOrEqualToKeyNodeID)
 	}
 
-	if position < t.halfBranchCapacity {
-		branch.InsertAt(position, key, greaterThanOrEqToKeyNode.ID())
-	} else {
+	if position > t.halfBranchCapacity {
 		right.InsertAt(position-t.halfBranchCapacity-1, key, greaterThanOrEqToKeyNode.ID())
 	}
 
@@ -466,7 +474,22 @@ func (t *bPlusTree) branchSplit(branch BranchNode, position int, key Key, greate
 	})
 	t.setSiblings(branch, right)
 
+	parentKey := t.findMinimum(right)
+
 	return right, parentKey
+}
+
+func (t *bPlusTree) findMinimum(branch BranchNode) Key {
+	var leaf LeafNode
+	isLeaf := false
+	for !isLeaf {
+		node := t.adapter.LoadNode(branch.EntryAt(0).LowerThanKeyNodeID)
+		leaf, isLeaf = node.(LeafNode)
+		if !isLeaf {
+			branch = node.(BranchNode)
+		}
+	}
+	return leaf.KeyAt(0)
 }
 
 func (t *bPlusTree) setSiblings(left, right Node) {
