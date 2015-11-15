@@ -146,28 +146,71 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
 		return
 	}
 
-	panic("CANT MERGE BRANCHES YET")
+	// At this point we need to merge nodes, just need to figure out which one
+	var parentKeyCandidate Key
+	if right != nil {
+		left, parentKeyCandidate = t.mergeBranches(branch, right)
+	} else if left != nil {
+		left, parentKeyCandidate = t.mergeBranches(left, branch)
+	} else {
+		// This is unlikely to happen but who knows...
+		panic("Something weird happened")
+	}
 
-	// // At this point we need to merge leaves, just need to figure out which one
-	// var parentKeyCandidate Key
-	// if right != nil {
-	// 	left, parentKeyCandidate = t.mergeLeaves(leaf, right)
-	// } else if left != nil {
-	// 	left, parentKeyCandidate = t.mergeLeaves(left, leaf)
-	// } else {
-	// 	// This is unlikely to happen but who knows...
-	// 	panic("Something weird happened")
-	// }
+	parent := t.adapter.LoadBranch(left.ParentID())
+	if parent.TotalKeys() <= t.halfBranchCapacity {
+		panic("Can't clear a level of the tree yet")
+		return
+	}
 
-	// parent := t.adapter.LoadBranch(left.ParentID())
-	// if t.adapter.IsRoot(parent) && parent.TotalKeys() == 1 {
-	// 	t.adapter.Free(parent)
-	// 	t.adapter.SetRoot(left)
-	// 	return
-	// }
+	// REFACTOR: The code below looks the stuff above o_O
+	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
+	if deletePosition == 0 {
+		parent.Shift()
+	} else {
+		if deletePosition == parent.TotalKeys() {
+			deletePosition -= 1
+		}
+		parent.DeleteAt(deletePosition)
+	}
 
-	// deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
-	// t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
+	grandParent := t.adapter.LoadBranch(parent.ParentID())
+	if grandParent != nil {
+		panic("Delete key from grandparent")
+	}
+}
+
+func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
+	insertPosition := left.TotalKeys()
+
+	entry := right.EntryAt(0)
+	newLeftKeyNodeID := entry.LowerThanKeyNodeID
+	leftKey := t.adapter.LoadNode(newLeftKeyNodeID).KeyAt(0)
+	left.InsertAt(insertPosition, leftKey, entry.LowerThanKeyNodeID)
+	child := t.adapter.LoadNode(entry.LowerThanKeyNodeID)
+	child.SetParentID(left.ID())
+	insertPosition += 1
+
+	right.All(func (entry BranchEntry) {
+		left.InsertAt(insertPosition, entry.Key, entry.GreaterThanOrEqualToKeyNodeID)
+		child := t.adapter.LoadNode(entry.GreaterThanOrEqualToKeyNodeID)
+		child.SetParentID(left.ID())
+		insertPosition += 1
+	})
+	left.SetRightSiblingID(right.RightSiblingID())
+
+	newRight := t.rightBranchSibling(right)
+	if newRight != nil {
+		newRight.SetLeftSiblingID(left.ID())
+	}
+
+	middleKey := right.KeyAt(0)
+	for right.TotalKeys() > 0 {
+		right.DeleteAt(0)
+	}
+	t.adapter.Free(right)
+
+	return left, middleKey
 }
 
 func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
@@ -179,6 +222,9 @@ func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
 	parent.ReplaceKeyAt(position-1, right.KeyAt(0))
 
 	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
+
+	child := t.adapter.LoadNode(firstFromRight.LowerThanKeyNodeID)
+	child.SetParentID(left.ID())
 }
 
 func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
@@ -191,6 +237,9 @@ func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
 	newRightKeyNodeID := right.EntryAt(0).LowerThanKeyNodeID
 	rightKey := t.adapter.LoadNode(newRightKeyNodeID).KeyAt(0)
 	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+
+	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+	child.SetParentID(right.ID())
 }
 
 func (t *bPlusTree) rightBranchSibling(left BranchNode) BranchNode {

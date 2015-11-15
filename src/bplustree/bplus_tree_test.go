@@ -190,6 +190,7 @@ func TestBPlusTree_PipeItemsFromLeafSiblings(t *testing.T) {
 
 	nodesCount := len(adapter.nodes)
 
+	// REFACTOR: Magic numbers sucks...
 	assertTreeCanDeleteByKey(t, tree, 20)
 	assertTreeCanDeleteByKey(t, tree, 30)
 
@@ -210,6 +211,7 @@ func TestBPlusTree_PipeItemsFromLeafSiblings(t *testing.T) {
 
 func TestBPlusTree_RightMergeLeavesAttachedToRoot(t *testing.T) {
 	tree := createTree(6, 4)
+	// REFACTOR: Magic numbers sucks...
 	for i := 0; i < 6*2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
@@ -224,6 +226,7 @@ func TestBPlusTree_RightMergeLeavesAttachedToRoot(t *testing.T) {
 
 func TestBPlusTree_LeftMergeLeavesAttachedToRoot(t *testing.T) {
 	tree := createTree(6, 4)
+	// REFACTOR: Magic numbers sucks...
 	for i := 0; i < 6*2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
@@ -249,6 +252,7 @@ func TestBPlusTree_PipeItemsFromBranchSiblings(t *testing.T) {
 		}
 	}
 
+	// REFACTOR: Magic numbers sucks...
 	// Here be dragons!
 	assertTreeCanDeleteByKey(t, tree, 0)
 	assertTreeCanDeleteByKey(t, tree, 1)
@@ -284,37 +288,60 @@ func TestBPlusTree_PipeItemsFromBranchSiblings(t *testing.T) {
 }
 
 func TestBPlusTree_RightMergeBranches(t *testing.T) {
-	t.Fatal("TODO")
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*(branchCapacity/2+1)*leafCapacity/2 + 1
+	totalEntries := (branchCapacity+1)*(branchCapacity/2+1)*leafCapacity/2
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := 6*2-1; i >= 0; i-- {
-		assertTreeCanDeleteByKey(t, tree, i)
+	nodesBefore := len(adapter.nodes)
+	assertTreeCanDeleteByKey(t, tree, 0)
+
+	if nodesBefore - len(adapter.nodes) != 2 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-2)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
-	}
+	var lastKey Key
+	tree.All(func (entry LeafEntry) {
+		if lastKey == nil {
+			lastKey = entry.Key
+		} else if entry.Key.Less(lastKey) {
+			t.Fatal("Items are not in order")
+		}
+		lastKey = entry.Key
+	})
 }
 
 func TestBPlusTree_LeftMergeBranches(t *testing.T) {
-	t.Fatal("TODO")
-	tree := createTree(6, 4)
-	for i := 0; i < 6*2; i++ {
+	branchCapacity := 6
+	leafCapacity := 4
+	tree := createTree(branchCapacity, leafCapacity)
+	totalEntries := (branchCapacity+1)*(branchCapacity/2+1)*leafCapacity/2
+
+	for i := 0; i < totalEntries-2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := 6*2-1; i >= 0; i-- {
+	nodesBefore := len(adapter.nodes)
+	// REFACTOR: Magic numbers sucks...
+	for i := 47; i <= 53; i++ {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
+	if nodesBefore - len(adapter.nodes) != 4 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-4)
 	}
+
+	var lastKey Key
+	tree.All(func (entry LeafEntry) {
+		if lastKey == nil {
+			lastKey = entry.Key
+		} else if entry.Key.Less(lastKey) {
+			t.Fatal("Items are not in order")
+		}
+		lastKey = entry.Key
+	})
 }
 
 func createTree(branchCapacity int, leafCapacity int) BPlusTree {
