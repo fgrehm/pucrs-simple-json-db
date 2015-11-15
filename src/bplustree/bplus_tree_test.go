@@ -23,7 +23,7 @@ func TestBPlusTree_InsertAndRetrieveOnLeaf(t *testing.T) {
 	_, item = assertTreeCanInsertAndFind(t, tree, 5, "LAST")
 	items = append(items, item)
 
-	assertTreeCanListAllItemsInOrder(t, tree, items)
+	assertTreeItemsAreSame(t, tree, items)
 }
 
 func TestBPlusTree_LeafRootSplit(t *testing.T) {
@@ -35,7 +35,7 @@ func TestBPlusTree_LeafRootSplit(t *testing.T) {
 		items = append(items, item)
 	}
 
-	assertTreeCanListAllItemsInOrder(t, tree, items)
+	assertTreeItemsAreSame(t, tree, items)
 
 	if len(adapter.nodes) != 3 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
@@ -52,7 +52,7 @@ func TestBPlusTree_RightSplitLeavesAttachedToRoot(t *testing.T) {
 		items = append(items, item)
 	}
 
-	assertTreeCanListAllItemsInOrder(t, tree, items)
+	assertTreeItemsAreSame(t, tree, items)
 
 	if len(adapter.nodes) != 8 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
@@ -69,7 +69,7 @@ func TestBPlusTree_LeftSplitLeavesAttachedToRoot(t *testing.T) {
 		items = append([]Item{item}, items...)
 	}
 
-	assertTreeCanListAllItemsInOrder(t, tree, items)
+	assertTreeItemsAreSame(t, tree, items)
 
 	if len(adapter.nodes) != 6 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
@@ -88,7 +88,7 @@ func TestBPlusTree_SplitBranches(t *testing.T) {
 		items = append(items, item)
 	}
 
-	assertTreeCanListAllItemsInOrder(t, tree, items)
+	assertTreeItemsAreSame(t, tree, items)
 
 	if len(adapter.nodes) != 36 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
@@ -333,15 +333,7 @@ func TestBPlusTree_LeftMergeBranches(t *testing.T) {
 		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-4)
 	}
 
-	var lastKey Key
-	tree.All(func (entry LeafEntry) {
-		if lastKey == nil {
-			lastKey = entry.Key
-		} else if entry.Key.Less(lastKey) {
-			t.Fatal("Items are not in order")
-		}
-		lastKey = entry.Key
-	})
+	assertTreeKeysAreOrdered(t, tree)
 }
 
 func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
@@ -350,56 +342,23 @@ func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
 	tree := createTree(branchCapacity, leafCapacity)
 	totalEntries := (branchCapacity+1)*leafCapacity
 
+	keys := make([]int, 0, totalEntries*30)
 	for h := 0; h < 30; h++ {
+		var start, end int
 		if h % 2 == 0 {
-			for i := 0; i < totalEntries/2; i++ {
-				key := i * 50 + h
-				assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
-				var lastKey Key
-				tree.All(func (entry LeafEntry) {
-					if lastKey == nil {
-						lastKey = entry.Key
-					} else if entry.Key.Less(lastKey) {
-						t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
-					}
-					lastKey = entry.Key
-				})
-			}
+			start = 0
+			end = totalEntries/2
 		} else {
-			for i := totalEntries/2+1; i < totalEntries; i++ {
-				key := i * 50 + h
-				assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
-				var lastKey Key
-				tree.All(func (entry LeafEntry) {
-					if lastKey == nil {
-						lastKey = entry.Key
-					} else if entry.Key.Less(lastKey) {
-						t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
-					}
-					lastKey = entry.Key
-				})
-			}
+			start = totalEntries/2+1
+			end = totalEntries
 		}
-		var lastKey Key
-		tree.All(func (entry LeafEntry) {
-			if lastKey == nil {
-				lastKey = entry.Key
-			} else if entry.Key.Less(lastKey) {
-				t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
-			}
-			lastKey = entry.Key
-		})
-		println("----------------")
+		for i := start; i < end; i++ {
+			key := i * 50 + h
+			assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
+			keys = append(keys, key)
+			assertTreeKeysAreOrdered(t, tree)
+		}
 	}
-	var lastKey Key
-	tree.All(func (entry LeafEntry) {
-		if lastKey == nil {
-			lastKey = entry.Key
-		} else if entry.Key.Less(lastKey) {
-			t.Fatalf("Items are not in order. Found %+v after %+v", entry.Key, lastKey)
-		}
-		lastKey = entry.Key
-	})
 }
 
 func createTree(branchCapacity int, leafCapacity int) BPlusTree {
@@ -448,7 +407,7 @@ func assertTreeCanInsertAndFind(t *testing.T, tree BPlusTree, intKey int, string
 	return Uint32Key(intKey), StringItem(stringItem)
 }
 
-func assertTreeCanListAllItemsInOrder(t *testing.T, tree BPlusTree, items []Item) {
+func assertTreeItemsAreSame(t *testing.T, tree BPlusTree, items []Item) {
 	i := 0
 	funcCalled := false
 	tree.All(func(entry LeafEntry) {
@@ -464,4 +423,16 @@ func assertTreeCanListAllItemsInOrder(t *testing.T, tree BPlusTree, items []Item
 	if !funcCalled {
 		t.Errorf("Function passed to BPlusTree was not called")
 	}
+}
+
+func assertTreeKeysAreOrdered(t *testing.T, tree BPlusTree) {
+	var lastKey Key
+	tree.All(func (entry LeafEntry) {
+		if lastKey == nil {
+			lastKey = entry.Key
+		} else if entry.Key.Less(lastKey) {
+			t.Fatal("Items are not in order")
+		}
+		lastKey = entry.Key
+	})
 }
