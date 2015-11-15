@@ -382,8 +382,6 @@ func (t *bPlusTree) insertOnLeaf(leaf LeafNode, position int, entry LeafEntry) {
 		return
 	}
 	right := t.leafSplit(leaf, position, entry)
-	t.setSiblings(leaf, right)
-
 	parentKey := right.KeyAt(0)
 	if t.adapter.IsRoot(leaf) {
 		t.allocateNewRoot(parentKey, leaf, right)
@@ -416,6 +414,7 @@ func (t *bPlusTree) leafSplit(leaf LeafNode, position int, entry LeafEntry) Leaf
 	} else {
 		right.InsertAt(position-t.halfLeafCapacity, entry)
 	}
+	t.setSiblings(leaf, right)
 
 	return right
 }
@@ -427,12 +426,6 @@ func (t *bPlusTree) insertOnBranch(branch BranchNode, position int, key Key, gre
 	}
 
 	right, parentKey := t.branchSplit(branch, position, key, greaterThanOrEqToKeyNode)
-	t.setSiblings(branch, right)
-	t.updateParentID(right.EntryAt(0).LowerThanKeyNodeID, right.ID())
-	right.All(func(entry BranchEntry) {
-		t.updateParentID(entry.GreaterThanOrEqualToKeyNodeID, right.ID())
-	})
-
 	if t.adapter.IsRoot(branch) {
 		t.allocateNewRoot(parentKey, branch, right)
 		return
@@ -466,6 +459,12 @@ func (t *bPlusTree) branchSplit(branch BranchNode, position int, key Key, greate
 	} else {
 		right.InsertAt(position-t.halfBranchCapacity-1, key, greaterThanOrEqToKeyNode.ID())
 	}
+
+	t.updateParentID(right.EntryAt(0).LowerThanKeyNodeID, right.ID())
+	right.All(func(entry BranchEntry) {
+		t.updateParentID(entry.GreaterThanOrEqualToKeyNodeID, right.ID())
+	})
+	t.setSiblings(branch, right)
 
 	return right, parentKey
 }
