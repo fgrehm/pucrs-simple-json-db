@@ -44,8 +44,9 @@ type LeafEntriesIterator func(LeafEntry)
 type BranchNode interface {
 	Node
 	InsertAt(position int, key Key, greaterThanOrEqualToKeyNodeID NodeID)
+	Unshift(key Key, lowerThanKeyNodeID NodeID)
 	EntryAt(position int) BranchEntry
-	DeleteAt(position int)
+	DeleteAt(position int) BranchEntry
 	DeleteFrom(position int) BranchEntries
 	Shift()
 	ReplaceKeyAt(position int, newKey Key)

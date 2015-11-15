@@ -242,35 +242,45 @@ func TestBPlusTree_PipeItemsFromBranchSiblings(t *testing.T) {
 	tree := createTree(branchCapacity, leafCapacity)
 	totalEntries := (branchCapacity+1) * leafCapacity
 
-	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10
-		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
+	for r := 0; r < 4; r++ {
+		for i := 0; i < totalEntries/2; i++ {
+			key := i * 10 + r
+			insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
+		}
 	}
-	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10 + 1
-		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
-	}
-	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10 + 2
-		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
-	}
-	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10 + 3
-		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
-	}
+
+	// Here be dragons!
+	assertTreeCanDeleteByKey(t, tree, 0)
+	assertTreeCanDeleteByKey(t, tree, 1)
+	assertTreeCanDeleteByKey(t, tree, 10)
+	assertTreeCanDeleteByKey(t, tree, 11)
+	assertTreeCanDeleteByKey(t, tree, 12)
+	assertTreeCanDeleteByKey(t, tree, 13)
+	assertTreeCanDeleteByKey(t, tree, 32)
+	assertTreeCanDeleteByKey(t, tree, 33)
+	assertTreeCanDeleteByKey(t, tree, 92)
+	assertTreeCanDeleteByKey(t, tree, 93)
+	assertTreeCanDeleteByKey(t, tree, 102)
+	assertTreeCanDeleteByKey(t, tree, 103)
 
 	nodesCount := len(adapter.nodes)
 
-	assertTreeCanDeleteByKey(t, tree, 20)
-	assertTreeCanDeleteByKey(t, tree, 21)
-	assertTreeCanDeleteByKey(t, tree, 22)
-	assertTreeCanDeleteByKey(t, tree, 23)
+	assertTreeCanDeleteByKey(t, tree, 30)
+	assertTreeCanDeleteByKey(t, tree, 101)
 
-	DebugTree(tree, adapter)
-
-	if len(adapter.nodes) != nodesCount {
-		t.Fatalf("Did not pipe keys between branches back nodes, total=%d, expected=%d", len(adapter.nodes), nodesCount)
+	if len(adapter.nodes) != nodesCount-2 {
+		t.Fatalf("Did not pipe keys between branches back nodes, total=%d, expected=%d", len(adapter.nodes), nodesCount-2)
 	}
+
+	var lastKey Key
+	tree.All(func (entry LeafEntry) {
+		if lastKey == nil {
+			lastKey = entry.Key
+		} else if entry.Key.Less(lastKey) {
+			t.Fatal("Items are not in order")
+		}
+		lastKey = entry.Key
+	})
 }
 
 func TestBPlusTree_RightMergeBranches(t *testing.T) {

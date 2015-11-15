@@ -132,7 +132,81 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
 		return
 	}
 
-	panic("CANT CASCADE BRANCH MERGES YET")
+	// Try "borrowing" an item from the right
+	right := t.rightBranchSibling(branch)
+	if right != nil && right.TotalKeys() > t.halfBranchCapacity {
+		t.pipeFromRightBranch(right, branch)
+		return
+	}
+
+	// Try "borrowing" an item from the left
+	left := t.leftBranchSibling(branch)
+	if left != nil && left.TotalKeys() > t.halfBranchCapacity {
+		t.pipeFromLeftBranch(left, branch)
+		return
+	}
+
+	panic("CANT MERGE BRANCHES YET")
+
+	// // At this point we need to merge leaves, just need to figure out which one
+	// var parentKeyCandidate Key
+	// if right != nil {
+	// 	left, parentKeyCandidate = t.mergeLeaves(leaf, right)
+	// } else if left != nil {
+	// 	left, parentKeyCandidate = t.mergeLeaves(left, leaf)
+	// } else {
+	// 	// This is unlikely to happen but who knows...
+	// 	panic("Something weird happened")
+	// }
+
+	// parent := t.adapter.LoadBranch(left.ParentID())
+	// if t.adapter.IsRoot(parent) && parent.TotalKeys() == 1 {
+	// 	t.adapter.Free(parent)
+	// 	t.adapter.SetRoot(left)
+	// 	return
+	// }
+
+	// deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
+	// t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
+}
+
+func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
+	firstFromRight := right.DeleteAt(0)
+	parent := t.adapter.LoadBranch(right.ParentID())
+
+	position, _ := t.findOnNode(parent, firstFromRight.Key)
+	leftKey := parent.KeyAt(position-1)
+	parent.ReplaceKeyAt(position-1, right.KeyAt(0))
+
+	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
+}
+
+func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
+	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
+	parent := t.adapter.LoadBranch(right.ParentID())
+
+	position, _ := t.findOnNode(parent, lastFromLeft.Key)
+	parent.ReplaceKeyAt(position+1, lastFromLeft.Key)
+
+	newRightKeyNodeID := right.EntryAt(0).LowerThanKeyNodeID
+	rightKey := t.adapter.LoadNode(newRightKeyNodeID).KeyAt(0)
+	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+}
+
+func (t *bPlusTree) rightBranchSibling(left BranchNode) BranchNode {
+	right := t.adapter.LoadBranch(left.RightSiblingID())
+	if right == nil || left.ParentID() != right.ParentID() {
+		return nil
+	}
+	return right
+}
+
+func (t *bPlusTree) leftBranchSibling(right BranchNode) BranchNode {
+	left := t.adapter.LoadBranch(right.LeftSiblingID())
+	if left == nil || right.ParentID() != left.ParentID() {
+		return nil
+	}
+	return left
 }
 
 func (t *bPlusTree) rightLeafSibling(left LeafNode) LeafNode {
