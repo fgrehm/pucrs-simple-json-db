@@ -168,7 +168,7 @@ func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
 
 	parent := t.adapter.LoadBranch(right.ParentID())
 	position, _ := t.findOnNode(parent, firstFromRight)
-	parent.ReplaceKeyAt(position, lastFromLeft.Key)
+	parent.ReplaceKeyAt(position-1, lastFromLeft.Key)
 }
 
 func (t *bPlusTree) mergeLeaves(left, right LeafNode) (LeafNode, Key) {

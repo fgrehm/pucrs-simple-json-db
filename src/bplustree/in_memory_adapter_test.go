@@ -266,33 +266,21 @@ func (b *inMemoryBranch) All(iterator bplustree.BranchEntriesIterator) error {
 }
 
 func (b *inMemoryBranch) InsertAt(position int, key bplustree.Key, greaterThanOrEqualToKeyNodeID bplustree.NodeID) {
+	entry := bplustree.BranchEntry{
+		Key:                           key,
+		GreaterThanOrEqualToKeyNodeID: greaterThanOrEqualToKeyNodeID,
+	}
+
 	if position == 0 {
-		lowerThanKeyNodeID := b.entries[0].LowerThanKeyNodeID
-		entry := bplustree.BranchEntry{
-			Key:                           key,
-			LowerThanKeyNodeID:            lowerThanKeyNodeID,
-			GreaterThanOrEqualToKeyNodeID: greaterThanOrEqualToKeyNodeID,
-		}
+		entry.LowerThanKeyNodeID = b.entries[0].LowerThanKeyNodeID
 		b.entries[0].LowerThanKeyNodeID = greaterThanOrEqualToKeyNodeID
 		b.entries = append(bplustree.BranchEntries{entry}, b.entries...)
-
 	} else if position == len(b.entries) {
-		lowerThanKeyNodeID := b.entries[position-1].GreaterThanOrEqualToKeyNodeID
-		entry := bplustree.BranchEntry{
-			Key:                           key,
-			LowerThanKeyNodeID:            lowerThanKeyNodeID,
-			GreaterThanOrEqualToKeyNodeID: greaterThanOrEqualToKeyNodeID,
-		}
+		entry.LowerThanKeyNodeID = b.entries[position-1].GreaterThanOrEqualToKeyNodeID
 		b.entries = append(b.entries, entry)
 	} else {
-		lowerThanKeyNodeID := b.entries[position].GreaterThanOrEqualToKeyNodeID
-		entry := bplustree.BranchEntry{
-			Key:                           key,
-			LowerThanKeyNodeID:            lowerThanKeyNodeID,
-			GreaterThanOrEqualToKeyNodeID: greaterThanOrEqualToKeyNodeID,
-		}
+		entry.LowerThanKeyNodeID = b.entries[position-1].GreaterThanOrEqualToKeyNodeID
 		b.entries[position].LowerThanKeyNodeID = greaterThanOrEqualToKeyNodeID
-
 		b.entries = append(b.entries, entry)
 		copy(b.entries[position+1:], b.entries[position:])
 		b.entries[position] = entry
