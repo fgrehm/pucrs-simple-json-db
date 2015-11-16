@@ -38,8 +38,8 @@ func TestBPlusTree_LeafRootSplit(t *testing.T) {
 
 	assertTreeItemsAreSame(t, tree, items)
 
-	if len(adapter.nodes) != 3 {
-		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	if len(adapter.Nodes) != 3 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.Nodes))
 	}
 }
 
@@ -55,8 +55,8 @@ func TestBPlusTree_RightSplitLeavesAttachedToRoot(t *testing.T) {
 
 	assertTreeItemsAreSame(t, tree, items)
 
-	if len(adapter.nodes) != 8 {
-		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	if len(adapter.Nodes) != 8 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.Nodes))
 	}
 }
 
@@ -72,8 +72,8 @@ func TestBPlusTree_LeftSplitLeavesAttachedToRoot(t *testing.T) {
 
 	assertTreeItemsAreSame(t, tree, items)
 
-	if len(adapter.nodes) != 6 {
-		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	if len(adapter.Nodes) != 6 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.Nodes))
 	}
 }
 
@@ -91,8 +91,8 @@ func TestBPlusTree_SplitBranches(t *testing.T) {
 
 	assertTreeItemsAreSame(t, tree, items)
 
-	if len(adapter.nodes) != 36 {
-		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	if len(adapter.Nodes) != 36 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.Nodes))
 	}
 }
 
@@ -115,8 +115,8 @@ func TestBPlusTree_SplitsOnInternalNodes(t *testing.T) {
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 	assertTreeKeysAreOrdered(t, tree)
-	if len(adapter.nodes) != 16 {
-		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
+	if len(adapter.Nodes) != 16 {
+		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.Nodes))
 	}
 }
 
@@ -145,8 +145,8 @@ func TestBPlusTree_MaximizesUtilization(t *testing.T) {
 		offset += leafCapacity/2 + 1
 	}
 
-	if len(adapter.nodes) != 22 {
-		t.Fatalf("Created an unexpected set of nodes, total=%d, expected=22", len(adapter.nodes))
+	if len(adapter.Nodes) != 22 {
+		t.Fatalf("Created an unexpected set of nodes, total=%d, expected=22", len(adapter.Nodes))
 	}
 }
 
@@ -161,8 +161,8 @@ func TestBPlusTree_LeafRootDelete(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		assertTreeCantFindByKey(t, tree, i)
 	}
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Created an unexpected set of nodes, total=%d, expected=1", len(adapter.nodes))
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Created an unexpected set of nodes, total=%d, expected=1", len(adapter.Nodes))
 	}
 }
 
@@ -181,14 +181,14 @@ func TestBPlusTree_PipeItemsFromLeafSiblings(t *testing.T) {
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 
-	nodesCount := len(adapter.nodes)
+	nodesCount := len(adapter.Nodes)
 
 	// REFACTOR: Magic numbers sucks...
 	assertTreeCanDeleteByKey(t, tree, 20)
 	assertTreeCanDeleteByKey(t, tree, 30)
 
-	if len(adapter.nodes) != nodesCount {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesCount)
+	if len(adapter.Nodes) != nodesCount {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), nodesCount)
 	}
 
 	assertTreeKeysAreOrdered(t, tree)
@@ -204,8 +204,8 @@ func TestBPlusTree_RightMergeLeavesAttachedToRoot(t *testing.T) {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.Nodes))
 	}
 }
 
@@ -219,8 +219,8 @@ func TestBPlusTree_LeftMergeLeavesAttachedToRoot(t *testing.T) {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.nodes))
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=1", len(adapter.Nodes))
 	}
 }
 
@@ -252,13 +252,13 @@ func TestBPlusTree_PipeItemsFromBranchSiblings(t *testing.T) {
 	assertTreeCanDeleteByKey(t, tree, 102)
 	assertTreeCanDeleteByKey(t, tree, 103)
 
-	nodesCount := len(adapter.nodes)
+	nodesCount := len(adapter.Nodes)
 
 	assertTreeCanDeleteByKey(t, tree, 30)
 	assertTreeCanDeleteByKey(t, tree, 101)
 
-	if len(adapter.nodes) != nodesCount-2 {
-		t.Fatalf("Did not pipe keys between branches back nodes, total=%d, expected=%d", len(adapter.nodes), nodesCount-2)
+	if len(adapter.Nodes) != nodesCount-2 {
+		t.Fatalf("Did not pipe keys between branches back nodes, total=%d, expected=%d", len(adapter.Nodes), nodesCount-2)
 	}
 
 	assertTreeKeysAreOrdered(t, tree)
@@ -273,11 +273,11 @@ func TestBPlusTree_RightMergeBranches(t *testing.T) {
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	nodesBefore := len(adapter.nodes)
+	nodesBefore := len(adapter.Nodes)
 	assertTreeCanDeleteByKey(t, tree, 0)
 
-	if nodesBefore-len(adapter.nodes) != 2 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-2)
+	if nodesBefore-len(adapter.Nodes) != 2 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), nodesBefore-2)
 	}
 
 	assertTreeKeysAreOrdered(t, tree)
@@ -292,14 +292,14 @@ func TestBPlusTree_LeftMergeBranches(t *testing.T) {
 	for i := 0; i < totalEntries-2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	nodesBefore := len(adapter.nodes)
+	nodesBefore := len(adapter.Nodes)
 	// REFACTOR: Magic numbers sucks...
 	for i := 47; i <= 53; i++ {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if nodesBefore-len(adapter.nodes) != 4 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-4)
+	if nodesBefore-len(adapter.Nodes) != 4 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), nodesBefore-4)
 	}
 
 	assertTreeKeysAreOrdered(t, tree)
@@ -318,8 +318,8 @@ func TestBPlusTree_RightMergeBranchesUpToRoot(t *testing.T) {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), 1)
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), 1)
 	}
 }
 
@@ -364,8 +364,8 @@ func TestBPlusTree_LeftMergeBranchesUpToRoot(t *testing.T) {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), 1)
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), 1)
 	}
 }
 
@@ -404,13 +404,13 @@ func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
 	for _, key := range firstHalf {
 		assertTreeCanDeleteByKey(t, tree, key)
 	}
-	if len(adapter.nodes) != 1 {
-		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), 1)
+	if len(adapter.Nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.Nodes), 1)
 	}
 }
 
 func createTree(branchCapacity int, leafCapacity int) BPlusTree {
-	adapter = newInMemoryAdapter()
+	adapter = NewInMemoryAdapter()
 	tree := New(Config{
 		Adapter:        adapter,
 		LeafCapacity:   leafCapacity,

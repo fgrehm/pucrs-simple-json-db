@@ -2,10 +2,11 @@ package bplustree
 
 import (
 	"fmt"
+	"regexp"
 )
 
 func DebugTree(tree BPlusTree, adapter NodeAdapter) {
-	root := tree.root()
+	root := adapter.LoadRoot()
 	fmt.Print(debugNode(tree, adapter, "", root))
 }
 
@@ -28,6 +29,8 @@ func debugLeaf(tree BPlusTree, adapter NodeAdapter, indent string, leaf LeafNode
 
 func debugBranch(tree BPlusTree, adapter NodeAdapter, indent string, branch BranchNode) string {
 	output := fmt.Sprintf(indent+"BRANCH (ID=%d, parentID=%d, left=%d, right=%d)\n", branch.ID(), branch.ParentID(), branch.LeftSiblingID(), branch.RightSiblingID())
+	re := regexp.MustCompile("(.)")
+	indent = re.ReplaceAllString(indent, " ")
 	i := 0
 	total := branch.TotalKeys()
 	branch.All(func(entry BranchEntry) {

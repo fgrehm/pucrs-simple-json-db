@@ -1,7 +1,6 @@
 package bplustree
 
 type BPlusTree interface {
-	root() Node
 	Insert(key Key, item Item) error
 	Find(key Key) (Item, error)
 	All(iterator LeafEntriesIterator) error
