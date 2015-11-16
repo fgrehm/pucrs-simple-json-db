@@ -11,13 +11,13 @@ package test_utils
 //
 // XXX: This was copied from a project that I can remember =/
 func SlicesEqual(s1, s2 []byte) bool {
-  if len(s1) != len(s2) {
-    return false
-  }
-  for i, val := range s1 {
-    if s2[i] != val {
-      return false
-    }
-  }
-  return true
+	if len(s1) != len(s2) {
+		return false
+	}
+	for i, val := range s1 {
+		if s2[i] != val {
+			return false
+		}
+	}
+	return true
 }

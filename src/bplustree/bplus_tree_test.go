@@ -65,7 +65,7 @@ func TestBPlusTree_LeftSplitLeavesAttachedToRoot(t *testing.T) {
 	totalEntries := 7*2 + 1
 
 	items := []Item{}
-	for i := totalEntries-1; i >= 0; i-- {
+	for i := totalEntries - 1; i >= 0; i-- {
 		_, item := assertTreeCanInsertAndFind(t, tree, i, fmt.Sprintf("item-%d", i))
 		items = append([]Item{item}, items...)
 	}
@@ -100,18 +100,18 @@ func TestBPlusTree_SplitsOnInternalNodes(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1) * leafCapacity
+	totalEntries := (branchCapacity + 1) * leafCapacity
 
 	for i := 0; i < totalEntries/2; i++ {
 		key := i * 10
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10 + 1
+		key := i*10 + 1
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 	for i := 0; i < totalEntries/4; i++ {
-		key := i * 10 + 2
+		key := i*10 + 2
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 	assertTreeKeysAreOrdered(t, tree)
@@ -170,14 +170,14 @@ func TestBPlusTree_PipeItemsFromLeafSiblings(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := branchCapacity * leafCapacity/2
+	totalEntries := branchCapacity * leafCapacity / 2
 
 	for i := 0; i < totalEntries/2; i++ {
 		key := i * 10
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 	for i := 0; i < totalEntries/2; i++ {
-		key := i * 10 + 1
+		key := i*10 + 1
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
 
@@ -215,7 +215,7 @@ func TestBPlusTree_LeftMergeLeavesAttachedToRoot(t *testing.T) {
 	for i := 0; i < 6*2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := 6*2-1; i >= 0; i-- {
+	for i := 6*2 - 1; i >= 0; i-- {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
@@ -228,11 +228,11 @@ func TestBPlusTree_PipeItemsFromBranchSiblings(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1) * leafCapacity
+	totalEntries := (branchCapacity + 1) * leafCapacity
 
 	for r := 0; r < 4; r++ {
 		for i := 0; i < totalEntries/2; i++ {
-			key := i * 10 + r
+			key := i*10 + r
 			insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 		}
 	}
@@ -268,7 +268,7 @@ func TestBPlusTree_RightMergeBranches(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*(branchCapacity/2+1)*leafCapacity/2
+	totalEntries := (branchCapacity + 1) * (branchCapacity/2 + 1) * leafCapacity / 2
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
@@ -276,7 +276,7 @@ func TestBPlusTree_RightMergeBranches(t *testing.T) {
 	nodesBefore := len(adapter.nodes)
 	assertTreeCanDeleteByKey(t, tree, 0)
 
-	if nodesBefore - len(adapter.nodes) != 2 {
+	if nodesBefore-len(adapter.nodes) != 2 {
 		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-2)
 	}
 
@@ -287,7 +287,7 @@ func TestBPlusTree_LeftMergeBranches(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*(branchCapacity/2+1)*leafCapacity/2
+	totalEntries := (branchCapacity + 1) * (branchCapacity/2 + 1) * leafCapacity / 2
 
 	for i := 0; i < totalEntries-2; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
@@ -298,7 +298,7 @@ func TestBPlusTree_LeftMergeBranches(t *testing.T) {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
-	if nodesBefore - len(adapter.nodes) != 4 {
+	if nodesBefore-len(adapter.nodes) != 4 {
 		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), nodesBefore-4)
 	}
 
@@ -309,7 +309,7 @@ func TestBPlusTree_RightMergeBranchesUpToRoot(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := branchCapacity*branchCapacity*leafCapacity
+	totalEntries := branchCapacity * branchCapacity * leafCapacity
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
@@ -327,12 +327,12 @@ func TestBPlusTree_RightMergeInternalBranches(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity+1
+	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity + 1
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := totalEntries/4; i < totalEntries; i++ {
+	for i := totalEntries / 4; i < totalEntries; i++ {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 }
@@ -341,12 +341,12 @@ func TestBPlusTree_LeftMergeInternalBranches(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity+1
+	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity + 1
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := totalEntries/2; i >= 0; i-- {
+	for i := totalEntries / 2; i >= 0; i-- {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 }
@@ -355,12 +355,12 @@ func TestBPlusTree_LeftMergeBranchesUpToRoot(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := branchCapacity*branchCapacity*leafCapacity
+	totalEntries := branchCapacity * branchCapacity * leafCapacity
 
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	for i := totalEntries-1; i >= 0; i-- {
+	for i := totalEntries - 1; i >= 0; i-- {
 		assertTreeCanDeleteByKey(t, tree, i)
 	}
 
@@ -373,20 +373,20 @@ func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
 	branchCapacity := 4
 	leafCapacity := 4
 	tree := createTree(branchCapacity, leafCapacity)
-	totalEntries := (branchCapacity+1)*leafCapacity
+	totalEntries := (branchCapacity + 1) * leafCapacity
 
 	keys := make([]int, 0, totalEntries*30)
 	for h := 0; h < 30; h++ {
 		var start, end int
-		if h % 2 == 0 {
+		if h%2 == 0 {
 			start = 0
-			end = totalEntries/2
+			end = totalEntries / 2
 		} else {
-			start = totalEntries/2+1
+			start = totalEntries/2 + 1
 			end = totalEntries
 		}
 		for i := start; i < end; i++ {
-			key := i * 50 + h
+			key := i*50 + h
 			assertTreeCanInsertAndFind(t, tree, key, fmt.Sprintf("item-%d", key))
 			keys = append(keys, key)
 			assertTreeKeysAreOrdered(t, tree)
@@ -475,7 +475,7 @@ func assertTreeItemsAreSame(t *testing.T, tree BPlusTree, items []Item) {
 
 func assertTreeKeysAreOrdered(t *testing.T, tree BPlusTree) {
 	var lastKey Key
-	tree.All(func (entry LeafEntry) {
+	tree.All(func(entry LeafEntry) {
 		if lastKey == nil {
 			lastKey = entry.Key
 		} else if entry.Key.Less(lastKey) {

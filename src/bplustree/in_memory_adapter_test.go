@@ -231,7 +231,7 @@ func (b *inMemoryBranch) Append(key bplustree.Key, gteNodeID bplustree.NodeID) {
 
 func (l *inMemoryBranch) DeleteAt(position int) bplustree.BranchEntry {
 	entry := l.entries[position]
-	if position == len(l.entries) - 1 {
+	if position == len(l.entries)-1 {
 		l.entries = l.entries[0:position]
 	} else if position == 0 {
 		l.entries = l.entries[1:]
@@ -271,7 +271,7 @@ func (b *inMemoryBranch) All(iterator bplustree.BranchEntriesIterator) error {
 
 func (b *inMemoryBranch) InsertAt(position int, key bplustree.Key, greaterThanOrEqualToKeyNodeID bplustree.NodeID) {
 	entry := bplustree.BranchEntry{
-		Key:                           key,
+		Key: key,
 		GreaterThanOrEqualToKeyNodeID: greaterThanOrEqualToKeyNodeID,
 	}
 
@@ -293,8 +293,8 @@ func (b *inMemoryBranch) InsertAt(position int, key bplustree.Key, greaterThanOr
 
 func (b *inMemoryBranch) Unshift(key bplustree.Key, lowerThanKeyNodeID bplustree.NodeID) {
 	entry := bplustree.BranchEntry{
-		Key:                key,
-		LowerThanKeyNodeID: lowerThanKeyNodeID,
+		Key:                           key,
+		LowerThanKeyNodeID:            lowerThanKeyNodeID,
 		GreaterThanOrEqualToKeyNodeID: b.entries[0].LowerThanKeyNodeID,
 	}
 	b.entries = append(bplustree.BranchEntries{entry}, b.entries...)

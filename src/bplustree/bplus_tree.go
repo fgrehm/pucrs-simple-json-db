@@ -215,7 +215,7 @@ func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
 	}
 	rightKey := parent.KeyAt(positionToReplaceOnParent)
 
-	positionToRemoveOnLeft := left.TotalKeys()-1
+	positionToRemoveOnLeft := left.TotalKeys() - 1
 	lastFromLeft := left.DeleteAt(positionToRemoveOnLeft)
 	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
 
@@ -273,7 +273,7 @@ func (t *bPlusTree) pipeFromRightLeaf(right, left LeafNode) {
 func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
 	firstFromRight := right.KeyAt(0)
 
-	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
+	lastFromLeft := left.DeleteAt(left.TotalKeys() - 1)
 	right.InsertAt(0, lastFromLeft)
 
 	parent := t.adapter.LoadBranch(right.ParentID())
@@ -286,7 +286,7 @@ func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
 
 func (t *bPlusTree) mergeLeaves(left, right LeafNode) {
 	insertPosition := left.TotalKeys()
-	right.All(func (entry LeafEntry) {
+	right.All(func(entry LeafEntry) {
 		left.InsertAt(insertPosition, entry)
 		insertPosition += 1
 	})
@@ -493,14 +493,14 @@ func (t *bPlusTree) findMaximum(branch BranchNode) Key {
 	var leaf LeafNode
 	isLeaf := false
 	for !isLeaf {
-		position := branch.TotalKeys()-1
+		position := branch.TotalKeys() - 1
 		node := t.adapter.LoadNode(branch.EntryAt(position).LowerThanKeyNodeID)
 		leaf, isLeaf = node.(LeafNode)
 		if !isLeaf {
 			branch = node.(BranchNode)
 		}
 	}
-	return leaf.KeyAt(leaf.TotalKeys()-1)
+	return leaf.KeyAt(leaf.TotalKeys() - 1)
 }
 
 func (t *bPlusTree) setSiblings(left, right Node) {
