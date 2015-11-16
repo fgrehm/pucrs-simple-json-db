@@ -158,12 +158,6 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
 	}
 
 	parent := t.adapter.LoadBranch(left.ParentID())
-	if parent.TotalKeys() <= t.halfBranchCapacity {
-		panic("Can't clear a level of the tree yet")
-		return
-	}
-
-	// REFACTOR: The code below looks the stuff above o_O
 	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
 	t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
 }
@@ -172,19 +166,17 @@ func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
 	insertPosition := left.TotalKeys()
 
 	entry := right.EntryAt(0)
-	newLeftKeyNodeID := entry.LowerThanKeyNodeID
-	leftKey := t.adapter.LoadNode(newLeftKeyNodeID).KeyAt(0)
+	leftKey := t.findMinimum(right)
 	left.InsertAt(insertPosition, leftKey, entry.LowerThanKeyNodeID)
-	child := t.adapter.LoadNode(entry.LowerThanKeyNodeID)
-	child.SetParentID(left.ID())
+	t.updateParentID(entry.LowerThanKeyNodeID, left.ID())
 	insertPosition += 1
 
-	right.All(func (entry BranchEntry) {
-		left.InsertAt(insertPosition, entry.Key, entry.GreaterThanOrEqualToKeyNodeID)
-		child := t.adapter.LoadNode(entry.GreaterThanOrEqualToKeyNodeID)
-		child.SetParentID(left.ID())
+	for right.TotalKeys() > 0 {
+		newLeftEntry := right.DeleteAt(0)
+		left.InsertAt(insertPosition, newLeftEntry.Key, newLeftEntry.GreaterThanOrEqualToKeyNodeID)
+		t.updateParentID(newLeftEntry.GreaterThanOrEqualToKeyNodeID, left.ID())
 		insertPosition += 1
-	})
+	}
 	left.SetRightSiblingID(right.RightSiblingID())
 
 	newRight := t.rightBranchSibling(right)
@@ -192,13 +184,9 @@ func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
 		newRight.SetLeftSiblingID(left.ID())
 	}
 
-	middleKey := right.KeyAt(0)
-	for right.TotalKeys() > 0 {
-		right.DeleteAt(0)
-	}
 	t.adapter.Free(right)
 
-	return left, middleKey
+	return left, entry.Key
 }
 
 func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
