@@ -115,10 +115,10 @@ func (t *bPlusTree) deleteFromLeaf(leaf LeafNode, position int) {
 	}
 
 	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
-	t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
+	t.deleteFromBranch(parent, deletePosition)
 }
 
-func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
+func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int) {
 	if position == 0 {
 		branch.Shift()
 	} else {
@@ -159,7 +159,7 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int, key Key) {
 
 	parent := t.adapter.LoadBranch(left.ParentID())
 	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
-	t.deleteFromBranch(parent, deletePosition, parentKeyCandidate)
+	t.deleteFromBranch(parent, deletePosition)
 }
 
 func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
@@ -493,5 +493,7 @@ func (t *bPlusTree) allocateNewRoot(key Key, ltNode, gteNode Node) BranchNode {
 
 func (t *bPlusTree) updateParentID(nodeID NodeID, newParentID NodeID) {
 	node := t.adapter.LoadNode(nodeID)
-	node.SetParentID(newParentID)
+	if node != nil {
+		node.SetParentID(newParentID)
+	}
 }
