@@ -2,6 +2,7 @@ package bplustree_test
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	. "bplustree"
@@ -390,6 +391,21 @@ func TestBPlusTree_GrowAndShrinkLotsOfEntriesTwice(t *testing.T) {
 			keys = append(keys, key)
 			assertTreeKeysAreOrdered(t, tree)
 		}
+	}
+
+	sort.Ints(keys)
+	firstHalf := keys[len(keys)/2-1:]
+	secondHalf := keys[:len(keys)/2]
+	sort.Sort(sort.Reverse(sort.IntSlice(secondHalf)))
+
+	for _, key := range secondHalf {
+		assertTreeCanDeleteByKey(t, tree, key)
+	}
+	for _, key := range firstHalf {
+		assertTreeCanDeleteByKey(t, tree, key)
+	}
+	if len(adapter.nodes) != 1 {
+		t.Fatalf("Did not merge back nodes, total=%d, expected=%d", len(adapter.nodes), 1)
 	}
 }
 

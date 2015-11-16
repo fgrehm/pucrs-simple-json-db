@@ -279,7 +279,7 @@ func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
 	parent := t.adapter.LoadBranch(right.ParentID())
 	position, found := t.findOnNode(parent, firstFromRight)
 	if !found {
-		position += 1
+		position -= 1
 	}
 	parent.ReplaceKeyAt(position, lastFromLeft.Key)
 }
