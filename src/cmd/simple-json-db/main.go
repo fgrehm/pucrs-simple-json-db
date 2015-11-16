@@ -38,9 +38,10 @@ func main() {
 	// log.Printf("Record: %+v", record)
 	// log.Printf("Error:  %+v", err)
 
-	for i := 0; i < 100; i++ {
+	for i := uint32(0); i < 100; i++ {
+		id := i + 1
 		data := fmt.Sprintf(`{"a":%d}`, i)
-		id, err := db.InsertRecord(data)
+		err := db.InsertRecord(id, data)
 		if err != nil {
 			log.Fatalf("Unexpected error returned '%s'", err)
 		}
