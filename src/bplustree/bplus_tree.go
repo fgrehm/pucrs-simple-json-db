@@ -149,20 +149,28 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int) {
 	// At this point we need to merge nodes, just need to figure out which one
 	var parentKeyCandidate Key
 	if right != nil {
-		left, parentKeyCandidate = t.mergeBranches(branch, right)
+		left = t.mergeBranches(branch, right)
+		parentKeyCandidate = t.findMinimum(left)
 	} else if left != nil {
-		left, parentKeyCandidate = t.mergeBranches(left, branch)
+		left = t.mergeBranches(left, branch)
+		parentKeyCandidate = t.findMaximum(left)
 	} else {
 		// This is unlikely to happen but who knows...
 		panic("Something weird happened")
 	}
 
 	parent := t.adapter.LoadBranch(left.ParentID())
+	if t.adapter.IsRoot(parent) && parent.TotalKeys() == 1 {
+		t.adapter.Free(parent)
+		t.adapter.SetRoot(left)
+		return
+	}
+
 	deletePosition, _ := t.findOnNode(parent, parentKeyCandidate)
 	t.deleteFromBranch(parent, deletePosition)
 }
 
-func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
+func (t *bPlusTree) mergeBranches(left, right BranchNode) BranchNode {
 	insertPosition := left.TotalKeys()
 
 	entry := right.EntryAt(0)
@@ -186,7 +194,7 @@ func (t *bPlusTree) mergeBranches(left, right BranchNode) (BranchNode, Key) {
 
 	t.adapter.Free(right)
 
-	return left, entry.Key
+	return left
 }
 
 func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
@@ -465,6 +473,20 @@ func (t *bPlusTree) findMinimum(branch BranchNode) Key {
 		}
 	}
 	return leaf.KeyAt(0)
+}
+
+func (t *bPlusTree) findMaximum(branch BranchNode) Key {
+	var leaf LeafNode
+	isLeaf := false
+	for !isLeaf {
+		position := branch.TotalKeys()-1
+		node := t.adapter.LoadNode(branch.EntryAt(position).LowerThanKeyNodeID)
+		leaf, isLeaf = node.(LeafNode)
+		if !isLeaf {
+			branch = node.(BranchNode)
+		}
+	}
+	return leaf.KeyAt(leaf.TotalKeys()-1)
 }
 
 func (t *bPlusTree) setSiblings(left, right Node) {
