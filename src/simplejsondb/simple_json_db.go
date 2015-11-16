@@ -1,7 +1,6 @@
 package simplejsondb
 
 import (
-	"errors"
 	log "github.com/Sirupsen/logrus"
 
 	"simplejsondb/actions"
@@ -13,7 +12,7 @@ const BUFFER_SIZE = 256
 
 type SimpleJSONDB interface {
 	InsertRecord(id uint32, data string) error
-	RemoveRecord(id uint32) error
+	DeleteRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
 	UpdateRecord(id uint32, data string) error
 	Close() error
@@ -71,75 +70,20 @@ func (db *simpleJSONDB) Close() error {
 	return db.dataFile.Close()
 }
 
-// TODO: Delegate to an insert action
 func (db *simpleJSONDB) InsertRecord(id uint32, data string) error {
-	cb := core.NewDataBlockRepository(db.buffer).ControlBlock()
-	db.buffer.MarkAsDirty(cb.DataBlockID())
-
 	record := &core.Record{ID: id, Data: data}
-	allocator := actions.NewRecordAllocator(db.buffer)
-	if _, err := allocator.Add(record); err != nil {
-		return err
-	}
-	// TODO: After inserting the record, need to update the BTree+ index
-
-	return nil
+	return actions.Insert(db.buffer, record)
 }
 
-// TODO: Delegate to an update action
-func (db *simpleJSONDB) UpdateRecord(recordID uint32, data string) error {
-	rowID, err := db.findRowID(recordID)
-	if err != nil {
-		return err
-	}
-
-	record := &core.Record{ID: recordID, Data: data}
-	allocator := actions.NewRecordAllocator(db.buffer)
-	if err = allocator.Update(rowID, record); err != nil {
-		return err
-	}
-
-	return nil
+func (db *simpleJSONDB) UpdateRecord(id uint32, data string) error {
+	record := &core.Record{ID: id, Data: data}
+	return actions.Update(db.buffer, record)
 }
 
-// TODO: Delegate to a remove action
-func (db *simpleJSONDB) RemoveRecord(id uint32) error {
-	rowID, err := db.findRowID(id)
-	if err != nil {
-		return err
-	}
-
-	allocator := actions.NewRecordAllocator(db.buffer)
-	return allocator.Remove(rowID)
+func (db *simpleJSONDB) DeleteRecord(id uint32) error {
+	return actions.Delete(db.buffer, id)
 }
 
 func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
-	rowID, err := db.findRowID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return core.NewRecordFinder(db.buffer).Find(id, rowID)
-}
-
-// HACK: Temporary workaround while we don't have the BTree+ in place
-func (db *simpleJSONDB) findRowID(needle uint32) (core.RowID, error) {
-	log.Debugf("Looking up the RowID for %d", needle)
-	repo := core.NewDataBlockRepository(db.buffer)
-
-	blockID := repo.ControlBlock().FirstRecordDataBlock()
-	for {
-		rb := repo.RecordBlock(blockID)
-		for i, id := range rb.IDs() {
-			if id == needle {
-				return core.RowID{DataBlockID: blockID, LocalID: uint16(i)}, nil
-			}
-		}
-
-		blockID = rb.NextBlockID()
-		log.Debugf("Reading the next block %d", blockID)
-		if blockID == 0 {
-			return core.RowID{}, errors.New("Not found")
-		}
-	}
+	return actions.Find(db.buffer, id)
 }

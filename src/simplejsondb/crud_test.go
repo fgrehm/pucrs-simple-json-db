@@ -59,7 +59,7 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 			t.Fatalf("Unexpected error returned when inserting '%s'", err)
 		}
 
-		err = db.RemoveRecord(id)
+		err = db.DeleteRecord(id)
 		if err != nil {
 			t.Fatalf("Unexpected error returned when removing '%s'", err)
 		}
