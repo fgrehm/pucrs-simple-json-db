@@ -330,6 +330,30 @@ func TestBPlusTree_RightMergeBranchesUpToRoot(t *testing.T) {
 	}
 }
 
+func TestBPlusTree_RightMergeInternalBranches(t *testing.T) {
+	branchCapacity := 6
+	leafCapacity := 4
+	tree := createTree(branchCapacity, leafCapacity)
+	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity+1
+
+	for i := 0; i < totalEntries; i++ {
+		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
+	}
+	assertTreeCanDeleteByKey(t, tree, 108)
+}
+
+func TestBPlusTree_LeftMergeInternalBranches(t *testing.T) {
+	branchCapacity := 6
+	leafCapacity := 4
+	tree := createTree(branchCapacity, leafCapacity)
+	totalEntries := (branchCapacity+1)*branchCapacity*leafCapacity+1
+
+	for i := 0; i < totalEntries; i++ {
+		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
+	}
+	assertTreeCanDeleteByKey(t, tree, 124)
+}
+
 func TestBPlusTree_LeftMergeBranchesUpToRoot(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4

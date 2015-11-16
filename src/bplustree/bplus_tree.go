@@ -149,11 +149,11 @@ func (t *bPlusTree) deleteFromBranch(branch BranchNode, position int) {
 	// At this point we need to merge nodes, just need to figure out which one
 	var parentKeyCandidate Key
 	if right != nil {
+		parentKeyCandidate = t.findMinimum(right)
 		left = t.mergeBranches(branch, right)
-		parentKeyCandidate = t.findMinimum(left)
 	} else if left != nil {
-		left = t.mergeBranches(left, branch)
 		parentKeyCandidate = t.findMaximum(left)
+		left = t.mergeBranches(left, branch)
 	} else {
 		// This is unlikely to happen but who knows...
 		panic("Something weird happened")
@@ -202,7 +202,10 @@ func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
 	parent := t.adapter.LoadBranch(right.ParentID())
 
 	position, _ := t.findOnNode(parent, firstFromRight.Key)
-	parent.ReplaceKeyAt(position-1, right.KeyAt(0))
+	if position != 0 {
+		position -= 1
+	}
+	parent.ReplaceKeyAt(position, right.KeyAt(0))
 
 	leftKey := t.findMinimum(right)
 	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
@@ -458,7 +461,6 @@ func (t *bPlusTree) branchSplit(branch BranchNode, position int, key Key, greate
 	t.setSiblings(branch, right)
 
 	parentKey := t.findMinimum(right)
-
 	return right, parentKey
 }
 
