@@ -1,4 +1,4 @@
-DOCKER_IMAGE := fgrehm/simple-json-db
+DOCKER_IMAGE := fgrehm/alpine-go-web:1.5.1
 DOCKER_DEV_CONTAINER_NAME := simple-json-db-dev
 
 all: build test
@@ -12,7 +12,7 @@ bin/simple-json-db: $(shell find -L src -type f -name '*.go')
 .PHONY: test
 test:
 	@echo 'Running tests...'
-	gb test simplejsondb/...
+	gb test ...
 
 .PHONY: test.watch
 test.watch:
@@ -39,7 +39,3 @@ hack:
 					-w /code \
 					$(DOCKER_IMAGE) \
 					bash
-
-.PHONY: build.dev.env
-build.dev.env:
-	docker build -t $(DOCKER_IMAGE) .
