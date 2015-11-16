@@ -205,21 +205,22 @@ func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
 }
 
 func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
-	rightKey := t.findMaximum(left)
+	rightKey := t.findMinimum(right)
 	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
-	parentKey := lastFromLeft.Key
 
 	parent := t.adapter.LoadBranch(right.ParentID())
-	position, found := t.findOnNode(parent, parentKey)
+
+	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+	child.SetParentID(right.ID())
+
+	parentKey := t.findMinimum(right)
+	position, found := t.findOnNode(parent, rightKey)
 	if !found && position < 0 {
 		position += 1
 	}
 	parent.ReplaceKeyAt(position, parentKey)
 
-	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
-
-	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
-	child.SetParentID(right.ID())
 }
 
 func (t *bPlusTree) rightBranchSibling(left BranchNode) BranchNode {
