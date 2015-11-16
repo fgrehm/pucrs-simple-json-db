@@ -113,15 +113,7 @@ func TestBPlusTree_SplitsOnInternalNodes(t *testing.T) {
 		key := i * 10 + 2
 		insertOnTree(t, tree, key, fmt.Sprintf("item-%d", key))
 	}
-	var lastKey Key
-	tree.All(func (entry LeafEntry) {
-		if lastKey == nil {
-			lastKey = entry.Key
-		} else if entry.Key.Less(lastKey) {
-			t.Fatal("Items are not in order")
-		}
-		lastKey = entry.Key
-	})
+	assertTreeKeysAreOrdered(t, tree)
 	if len(adapter.nodes) != 16 {
 		t.Fatalf("Created an invalid amount of nodes: %d", len(adapter.nodes))
 	}
@@ -339,7 +331,9 @@ func TestBPlusTree_RightMergeInternalBranches(t *testing.T) {
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	assertTreeCanDeleteByKey(t, tree, 108)
+	for i := totalEntries/4; i < totalEntries; i++ {
+		assertTreeCanDeleteByKey(t, tree, i)
+	}
 }
 
 func TestBPlusTree_LeftMergeInternalBranches(t *testing.T) {
@@ -351,7 +345,9 @@ func TestBPlusTree_LeftMergeInternalBranches(t *testing.T) {
 	for i := 0; i < totalEntries; i++ {
 		insertOnTree(t, tree, i, fmt.Sprintf("item-%d", i))
 	}
-	assertTreeCanDeleteByKey(t, tree, 124)
+	for i := totalEntries/2; i >= 0; i-- {
+		assertTreeCanDeleteByKey(t, tree, i)
+	}
 }
 
 func TestBPlusTree_LeftMergeBranchesUpToRoot(t *testing.T) {

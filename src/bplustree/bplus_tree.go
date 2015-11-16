@@ -198,16 +198,17 @@ func (t *bPlusTree) mergeBranches(left, right BranchNode) BranchNode {
 }
 
 func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
+	leftKey := t.findMinimum(right)
 	firstFromRight := right.DeleteAt(0)
-	parent := t.adapter.LoadBranch(right.ParentID())
+	parentKey := firstFromRight.Key
 
-	position, _ := t.findOnNode(parent, firstFromRight.Key)
-	if position != 0 {
+	parent := t.adapter.LoadBranch(right.ParentID())
+	position, found := t.findOnNode(parent, parentKey)
+	if !found && position != parent.TotalKeys()-1 {
 		position -= 1
 	}
-	parent.ReplaceKeyAt(position, right.KeyAt(0))
+	parent.ReplaceKeyAt(position, parentKey)
 
-	leftKey := t.findMinimum(right)
 	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
 
 	child := t.adapter.LoadNode(firstFromRight.LowerThanKeyNodeID)
@@ -215,13 +216,17 @@ func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
 }
 
 func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
+	rightKey := t.findMaximum(left)
 	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
+	parentKey := lastFromLeft.Key
+
 	parent := t.adapter.LoadBranch(right.ParentID())
+	position, found := t.findOnNode(parent, parentKey)
+	if !found && position < 0 {
+		position += 1
+	}
+	parent.ReplaceKeyAt(position, parentKey)
 
-	position, _ := t.findOnNode(parent, lastFromLeft.Key)
-	parent.ReplaceKeyAt(position+1, lastFromLeft.Key)
-
-	rightKey := t.findMinimum(right)
 	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
 
 	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
@@ -265,7 +270,10 @@ func (t *bPlusTree) pipeFromRightLeaf(right, left LeafNode) {
 	left.InsertAt(left.TotalKeys(), firstFromRight)
 
 	parent := t.adapter.LoadBranch(right.ParentID())
-	position, _ := t.findOnNode(parent, firstFromRight.Key)
+	position, found := t.findOnNode(parent, firstFromRight.Key)
+	if !found {
+		position -= 1
+	}
 	parent.ReplaceKeyAt(position, right.KeyAt(0))
 }
 
@@ -276,8 +284,11 @@ func (t *bPlusTree) pipeFromLeftLeaf(left, right LeafNode) {
 	right.InsertAt(0, lastFromLeft)
 
 	parent := t.adapter.LoadBranch(right.ParentID())
-	position, _ := t.findOnNode(parent, firstFromRight)
-	parent.ReplaceKeyAt(position-1, lastFromLeft.Key)
+	position, found := t.findOnNode(parent, firstFromRight)
+	if !found {
+		position += 1
+	}
+	parent.ReplaceKeyAt(position, lastFromLeft.Key)
 }
 
 func (t *bPlusTree) mergeLeaves(left, right LeafNode) (LeafNode, Key) {
@@ -286,12 +297,12 @@ func (t *bPlusTree) mergeLeaves(left, right LeafNode) (LeafNode, Key) {
 		left.InsertAt(insertPosition, entry)
 		insertPosition += 1
 	})
-	left.SetRightSiblingID(right.RightSiblingID())
 
-	newRight := t.rightLeafSibling(right)
+	newRight := t.adapter.LoadLeaf(right.RightSiblingID())
 	if newRight != nil {
 		newRight.SetLeftSiblingID(left.ID())
 	}
+	left.SetRightSiblingID(right.RightSiblingID())
 
 	middleKey := right.KeyAt(0)
 	t.adapter.Free(right)
