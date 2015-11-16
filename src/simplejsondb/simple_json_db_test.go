@@ -24,19 +24,15 @@ func TestSimpleJSONDB_InitializesDataFile(t *testing.T) {
 
 	jsondb.NewWithDataFile(fakeDataFile)
 
-	if !utils.SlicesEqual(firstDataBlock[0:4], []byte{0x00, 0x00, 0x00, 0x01}) {
-		t.Error("Did not set the next id to 1")
-	}
-
-	if !utils.SlicesEqual(firstDataBlock[4:6], []byte{0x00, 0x03}) {
+	if !utils.SlicesEqual(firstDataBlock[0:2], []byte{0x00, 0x03}) {
 		t.Error("Did not set the next available data block pointer to 3")
 	}
 
-	if !utils.SlicesEqual(firstDataBlock[6:8], []byte{0x00, 0x03}) {
+	if !utils.SlicesEqual(firstDataBlock[2:4], []byte{0x00, 0x03}) {
 		t.Error("Did not set the first record block pointer to 3")
 	}
 
-	if !utils.SlicesEqual(firstDataBlock[8:10], []byte{0x00, 0x04}) {
+	if !utils.SlicesEqual(firstDataBlock[4:6], []byte{0x00, 0x04}) {
 		t.Error("Did not set the btree pointer to 4")
 	}
 

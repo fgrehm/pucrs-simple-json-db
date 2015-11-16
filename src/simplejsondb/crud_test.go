@@ -22,8 +22,9 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 	}
 
 	for i := 0; i < 4500; i++ {
+		id := uint32(i+1)
 		data := fmt.Sprintf(`{"a":%d}`, i)
-		id, err := db.InsertRecord(data)
+		err := db.InsertRecord(id, data)
 		if err != nil {
 			t.Fatalf("Unexpected error returned for the %d-th record: '%s'", id, err)
 		}
@@ -51,8 +52,9 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
+		id := uint32(i+1)
 		data := fmt.Sprintf(`{"a":%d}`, i)
-		id, err := db.InsertRecord(data)
+		err := db.InsertRecord(id, data)
 		if err != nil {
 			t.Fatalf("Unexpected error returned when inserting '%s'", err)
 		}
@@ -83,7 +85,8 @@ func TestCreateAndUpdateRecords(t *testing.T) {
 	// Insert some data
 	for i := 0; i < 1000; i++ {
 		data := fmt.Sprintf(`{"longest":%d}`, i)
-		_, err := db.InsertRecord(data)
+		id := uint32(i+1)
+		err := db.InsertRecord(id, data)
 		if err != nil {
 			t.Fatalf("Unexpected error returned when inserting '%s'", err)
 		}

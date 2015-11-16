@@ -12,7 +12,7 @@ import (
 const BUFFER_SIZE = 256
 
 type SimpleJSONDB interface {
-	InsertRecord(data string) (uint32, error)
+	InsertRecord(id uint32, data string) error
 	RemoveRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
 	UpdateRecord(id uint32, data string) error
@@ -39,11 +39,8 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 	jsonDB := &simpleJSONDB{dataFile, repo, dataBuffer}
 
 	controlBlock := repo.ControlBlock()
-	if controlBlock.NextID() == 0 {
-		// TODO: PUSH FORMAT LOGIC OUT TO A SEPARATE OBJECT AND REUSE ON TESTS
-
+	if controlBlock.NextAvailableRecordsDataBlockID() == 0 {
 		log.Println("FORMAT_DB")
-
 		controlBlock.Format()
 		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
@@ -75,20 +72,18 @@ func (db *simpleJSONDB) Close() error {
 }
 
 // TODO: Delegate to an insert action
-func (db *simpleJSONDB) InsertRecord(data string) (uint32, error) {
+func (db *simpleJSONDB) InsertRecord(id uint32, data string) error {
 	cb := core.NewDataBlockRepository(db.buffer).ControlBlock()
-	recordId := cb.NextID()
-	cb.IncNextID()
 	db.buffer.MarkAsDirty(cb.DataBlockID())
 
-	record := &core.Record{ID: recordId, Data: data}
+	record := &core.Record{ID: id, Data: data}
 	allocator := actions.NewRecordAllocator(db.buffer)
 	if _, err := allocator.Add(record); err != nil {
-		return 0, err
+		return err
 	}
 	// TODO: After inserting the record, need to update the BTree+ index
 
-	return recordId, nil
+	return nil
 }
 
 // TODO: Delegate to an update action

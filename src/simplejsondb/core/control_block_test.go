@@ -9,29 +9,8 @@ import (
 	"testing"
 )
 
-func TestControlBlock_NextID(t *testing.T) {
-	block := &dbio.DataBlock{Data: []byte{0x00, 0x00, 0x00, 0x10}}
-	cb := &controlBlock{block}
-
-	if id := cb.NextID(); id != 16 {
-		t.Errorf("Next id was not read, got %d and expected %d", id, 16)
-	}
-
-	for i := 0; i < 300; i++ {
-		cb.IncNextID()
-	}
-	if id := cb.NextID(); id != 316 {
-		t.Errorf("Next id was not read, got %d and expected %d", id, 316)
-	}
-
-	if !utils.SlicesEqual(block.Data, []byte{0x00, 0x00, 0x01, 0x3c}) {
-		fmt.Printf("% x\n", block.Data)
-		t.Errorf("Invalid data written to block (% x)", block.Data)
-	}
-}
-
 func TestControlBlock_NextAvailableRecordsDataBlock(t *testing.T) {
-	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0x10, 0x01}}
+	block := &dbio.DataBlock{Data: []byte{0x10, 0x01}}
 	cb := &controlBlock{block}
 
 	if id := cb.NextAvailableRecordsDataBlockID(); id != 4097 {
@@ -43,14 +22,14 @@ func TestControlBlock_NextAvailableRecordsDataBlock(t *testing.T) {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 900)
 	}
 
-	if !utils.SlicesEqual(block.Data, []byte{0, 0, 0, 0, 0x03, 0x84}) {
+	if !utils.SlicesEqual(block.Data, []byte{0x03, 0x84}) {
 		fmt.Printf("% x\n", block.Data)
 		t.Errorf("Invalid data written to block (% x)", block.Data)
 	}
 }
 
 func TestControlBlock_BTreeRootBlock(t *testing.T) {
-	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09}}
+	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0, 0x09}}
 	cb := &controlBlock{block}
 
 	if blockID := cb.BTreeRootBlock(); blockID != 9 {
@@ -62,7 +41,7 @@ func TestControlBlock_BTreeRootBlock(t *testing.T) {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 901)
 	}
 
-	if !utils.SlicesEqual(block.Data, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0x03, 0x85}) {
+	if !utils.SlicesEqual(block.Data, []byte{0, 0, 0, 0, 0x03, 0x85}) {
 		fmt.Printf("% x\n", block.Data)
 		t.Errorf("Invalid data written to block (% x)", block.Data)
 	}

@@ -5,18 +5,15 @@ import (
 )
 
 const (
-	POS_NEXT_ID                  = 0
-	POS_NEXT_AVAILABLE_DATABLOCK = 4
-	POS_FIRST_BLOCK_PTR          = 6
-	POS_BTREE_ROOT               = 8
-	POS_BTREE_FIRST_LEAF         = 10
+	POS_NEXT_AVAILABLE_DATABLOCK = 0
+	POS_FIRST_BLOCK_PTR          = 2
+	POS_BTREE_ROOT               = 4
+	POS_BTREE_FIRST_LEAF         = 6
 )
 
 type ControlBlock interface {
 	DataBlockID() uint16
 	Format()
-	NextID() uint32
-	IncNextID()
 	FirstRecordDataBlock() uint16
 	SetFirstRecordDataBlock(dataBlockID uint16)
 	NextAvailableRecordsDataBlockID() uint16
@@ -35,8 +32,6 @@ func (cb *controlBlock) DataBlockID() uint16 {
 }
 
 func (cb *controlBlock) Format() {
-	// Next ID = 1
-	cb.block.Write(POS_NEXT_ID, uint32(1))
 	// Next Available Datablock = 3
 	cb.block.Write(POS_NEXT_AVAILABLE_DATABLOCK, uint16(3))
 	// Where the linked list starts
@@ -64,14 +59,6 @@ func (cb *controlBlock) BTreeRootBlock() uint16 {
 
 func (cb *controlBlock) SetBTreeRootBlock(blockID uint16) {
 	cb.block.Write(POS_BTREE_ROOT, blockID)
-}
-
-func (cb *controlBlock) NextID() uint32 {
-	return cb.block.ReadUint32(POS_NEXT_ID)
-}
-
-func (cb *controlBlock) IncNextID() {
-	cb.block.Write(POS_NEXT_ID, cb.NextID()+1)
 }
 
 func (cb *controlBlock) NextAvailableRecordsDataBlockID() uint16 {
