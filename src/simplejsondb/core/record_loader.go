@@ -5,19 +5,19 @@ import (
 	"simplejsondb/dbio"
 )
 
-type RecordFinder interface {
-	Find(id uint32, rowID RowID) (*Record, error)
+type RecordLoader interface {
+	Load(id uint32, rowID RowID) (*Record, error)
 }
 
-type recordFinder struct {
+type recordLoader struct {
 	buffer dbio.DataBuffer
 }
 
-func NewRecordFinder(buffer dbio.DataBuffer) RecordFinder {
-	return &recordFinder{buffer}
+func NewRecordLoader(buffer dbio.DataBuffer) RecordLoader {
+	return &recordLoader{buffer}
 }
 
-func (rf *recordFinder) Find(id uint32, rowID RowID) (*Record, error) {
+func (rf *recordLoader) Load(id uint32, rowID RowID) (*Record, error) {
 	repo := NewDataBlockRepository(rf.buffer)
 	rb := repo.RecordBlock(rowID.DataBlockID)
 

@@ -15,7 +15,7 @@ func Find(buffer dbio.DataBuffer, id uint32) (*core.Record, error) {
     return nil, err
   }
 
-  return core.NewRecordFinder(buffer).Find(id, rowID)
+  return core.NewRecordLoader(buffer).Load(id, rowID)
 }
 
 // HACK: Temporary workaround while we don't have the BTree+ in place
