@@ -182,44 +182,47 @@ func (t *bPlusTree) mergeBranches(left, right BranchNode) {
 		return
 	}
 
-	keyToDelete := t.findMaximum(left)
-	t.deleteKeyFromBranch(parent, keyToDelete)
+	t.deleteKeyFromBranch(parent, leftKey)
 }
 
 func (t *bPlusTree) pipeFromRightBranch(right, left BranchNode) {
-	leftKey := t.findMinimum(right)
-	firstFromRight := right.DeleteAt(0)
-	parentKey := firstFromRight.Key
-
 	parent := t.adapter.LoadBranch(right.ParentID())
-	position, found := t.findOnNode(parent, parentKey)
-	if !found && position != parent.TotalKeys()-1 {
-		position -= 1
+	positionToReplaceOnParent, found := t.findOnNode(parent, right.KeyAt(0))
+	if !found {
+		// If we were not able to find it, it means the key is greater than the
+		// corresponding key on the parent node, so we move back one spot
+		positionToReplaceOnParent -= 1
 	}
-	parent.ReplaceKeyAt(position, parentKey)
 
+	leftKey := parent.KeyAt(positionToReplaceOnParent)
+	firstFromRight := right.DeleteAt(0)
 	left.InsertAt(left.TotalKeys(), leftKey, firstFromRight.LowerThanKeyNodeID)
 
 	child := t.adapter.LoadNode(firstFromRight.LowerThanKeyNodeID)
 	child.SetParentID(left.ID())
+
+	parentKey := t.findMinimum(right)
+	parent.ReplaceKeyAt(positionToReplaceOnParent, parentKey)
 }
 
 func (t *bPlusTree) pipeFromLeftBranch(left, right BranchNode) {
-	rightKey := t.findMinimum(right)
-	lastFromLeft := left.DeleteAt(left.TotalKeys()-1)
-
 	parent := t.adapter.LoadBranch(right.ParentID())
+	positionToReplaceOnParent, found := t.findOnNode(parent, right.KeyAt(0))
+	if !found {
+		// If we were not able to find it, it means the key is greater than the
+		// corresponding key on the parent node, so we move back one spot
+		positionToReplaceOnParent -= 1
+	}
+	rightKey := parent.KeyAt(positionToReplaceOnParent)
 
+	positionToRemoveOnLeft := left.TotalKeys()-1
+	lastFromLeft := left.DeleteAt(positionToRemoveOnLeft)
 	right.Unshift(rightKey, lastFromLeft.GreaterThanOrEqualToKeyNodeID)
+
 	child := t.adapter.LoadNode(lastFromLeft.GreaterThanOrEqualToKeyNodeID)
 	child.SetParentID(right.ID())
 
-	parentKey := t.findMinimum(right)
-	position, found := t.findOnNode(parent, rightKey)
-	if !found && position < 0 {
-		position += 1
-	}
-	parent.ReplaceKeyAt(position, parentKey)
+	parent.ReplaceKeyAt(positionToReplaceOnParent, lastFromLeft.Key)
 
 }
 
