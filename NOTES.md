@@ -7,23 +7,35 @@
 - [x] Basic insertion of strings on a single datablock
 - [x] Double linked list of datablocks and insertion on multiple datablocks
 - [x] Remove records
-- [ ] Bitmap for datablocks
-- [ ] Chained rows
-- [ ] "Fill in gaps" left by removed records
-- [ ] Update records
-- [ ] Search by tag using a sequential read of the list of records present on a datablock
+- [x] "Fill in gaps" left by removed records
+- [x] Datablocks map using a bitmap under the hood
+- [x] Make use of the datablocks map from the allocator object
+- [x] "Collapse" record datablock linked lists when it gets empty and reclaim block (mark as free)
+- [x] Chained rows
+- [x] Update records
+- [x] B+Tree index
+- [ ] Remove autoincrement logic
+- [ ] Integrate BTree with the rest of the code
+- [ ] Fix datablocks map
+- [ ] Buffer with Clock cache strategy (and revisit buffer needs required for testing)
+- [ ] Search by tag using a sequential read of the list of records present on a datablock derived from the BTree+ index
 - [ ] Shell with readline enabled
-- [ ] Reserve the first 3 datablocks for internal information (like the datablocks bitmap and the next ID to be used)
-- [ ] BTree+ index
-- [ ] Validate JSON provided
-- [ ] Infrastructure for integration testing using basht
-- [ ] Buffer with Clock cache strategy
 - [ ] Buffer with "a more efficient lookup"
+- [ ] Documentation (including "class diagram")
 
 # Nice to haves
 
+- [ ] "Norm" on Delete X remove
+- [ ] Rename packages and CLI to sjdb
+- [ ] Rename BTreePlus to BPlusTree
 - [ ] HTTP API + form to save data
 - [ ] Allow configuring datafile and datablock sizes
+- [ ] Deal with datafile that has no space left
+- [ ] Refactor tests to reduce copy & paste
+- [ ] Consistent use of `*Block` and `*BlockID`
+- [ ] `type DataBlockIDType uint16`
+- [ ] `type RecordIDType uint32`
+- [ ] `type DataBlockWrapper { func DataBlockID() DataBlockIDType }`
 
 # Anatomy of a data block that stores records
 
@@ -42,18 +54,22 @@
 # Anatomy of a data block that stores BTree+ branches
 
 - Total size: 4KB
-- Byte 0-1: uint16 that stores the total entries on the node and the flag for the node type flag (0 - branch or 1 - leaf)
-- Byte 2-4: rowid for sibling pointers (1 uint16 for left sibling pointer and another for the right pointer)
+- Byte 0: uint8 that stores the flag for the node type flag (1 - branch or 2 - leaf)
+- Byte 1-2: uint16 that stores total entries on the node
+- Byte 3-4: uint16 that stores the parent datablock id
+- Byte 5-8: rowid for sibling pointers (1 uint16 for left sibling pointer and another for the right pointer)
 - Each entry takes up 6 bytes (4 for the search key and 2 for the next node datablock ID)
-- Max amount of entries: (4096 bytes - 4 bytes for total entries and type flag) / 6 =~ 680
+- Max amount of entries: (4096 bytes - 8 bytes for total entries and type flag) / 6 =~ 680
 
 # Anatomy of a data block that stores BTree+ leafs
 
 - Total size: 4KB
-- Byte 0-1: uint16 that stores the total entries on the node and the flag for the node type flag (0 - branch or 1 - leaf)
+- Byte 0: uint8 that stores the flag for the node type flag (1 - branch or 2 - leaf)
+- Byte 1-2: uint16 that stores total entries on the node
+- Byte 3-4: uint16 that stores the parent datablock id
+- Byte 5-8: rowid for sibling pointers (1 uint16 for left sibling pointer and another for the right pointer)
 - Each entry takes up 8 bytes (4 for the search key and 4 for the row ID)
-- Byte 2-4: rowid for sibling pointers (1 uint16 for left sibling pointer and another for the right pointer)
-- Max amount of entries: (4096 bytes - 4 bytes for total entries and type flag) / 8 =~ 510
+- Max amount of entries: (4096 bytes - 7 bytes for total entries and type flag) / 8 =~ 510
 
 # Random
 
