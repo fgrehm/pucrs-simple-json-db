@@ -31,6 +31,10 @@ func (t *bPlusTree) root() Node {
 	return t.adapter.LoadRoot()
 }
 
+func (t *bPlusTree) Init() {
+	t.adapter.Init()
+}
+
 func (t *bPlusTree) Insert(key Key, item Item) error {
 	var leaf LeafNode
 	root := t.adapter.LoadRoot()
@@ -244,7 +248,7 @@ func (t *bPlusTree) leftBranchSibling(right BranchNode) BranchNode {
 
 func (t *bPlusTree) rightLeafSibling(left LeafNode) LeafNode {
 	right := t.adapter.LoadLeaf(left.RightSiblingID())
-	if right == nil || left.ParentID() != right.ParentID() {
+	if right == nil || !left.ParentID().Equals(right.ParentID()) {
 		return nil
 	}
 	return right
@@ -252,7 +256,7 @@ func (t *bPlusTree) rightLeafSibling(left LeafNode) LeafNode {
 
 func (t *bPlusTree) leftLeafSibling(right LeafNode) LeafNode {
 	left := t.adapter.LoadLeaf(right.LeftSiblingID())
-	if left == nil || right.ParentID() != left.ParentID() {
+	if left == nil || !right.ParentID().Equals(left.ParentID()) {
 		return nil
 	}
 	return left

@@ -5,6 +5,7 @@ type BPlusTree interface {
 	Find(key Key) (Item, error)
 	All(iterator LeafEntriesIterator) error
 	Delete(key Key) error
+	Init()
 }
 
 type Key interface {
@@ -23,7 +24,9 @@ type Node interface {
 	KeyAt(position int) Key
 	TotalKeys() int
 }
-type NodeID interface{}
+type NodeID interface{
+	Equals(other NodeID) bool
+}
 
 type LeafNode interface {
 	Node

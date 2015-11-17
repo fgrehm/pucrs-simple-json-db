@@ -16,12 +16,15 @@ func NewInMemoryAdapter() *InMemoryAdapter {
 }
 
 type Uint32Key uint32
-
-func (a Uint32Key) Less(b Key) bool {
-	return a < b.(Uint32Key)
+func (k Uint32Key) Less(other Key) bool {
+	return k < other.(Uint32Key)
 }
 
 type Uint16ID uint16
+func (i Uint16ID) Equals(other NodeID) bool {
+	return i == other.(Uint16ID)
+}
+
 type StringItem string
 
 type inMemoryLeaf struct {
