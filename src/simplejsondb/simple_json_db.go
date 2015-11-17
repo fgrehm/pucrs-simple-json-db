@@ -1,8 +1,6 @@
 package simplejsondb
 
 import (
-	log "github.com/Sirupsen/logrus"
-
 	"simplejsondb/actions"
 	"simplejsondb/core"
 	"simplejsondb/dbio"
@@ -33,34 +31,13 @@ func New(datafilePath string) (SimpleJSONDB, error) {
 }
 
 func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
+	if err := core.FormatDataFileIfNeeded(dataFile); err != nil {
+		return nil, err
+	}
+
 	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
 	repo := core.NewDataBlockRepository(dataBuffer)
-	jsonDB := &simpleJSONDB{dataFile, repo, dataBuffer}
-
-	controlBlock := repo.ControlBlock()
-	if controlBlock.NextAvailableRecordsDataBlockID() == 0 {
-		log.Println("FORMAT_DB")
-		controlBlock.Format()
-		dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
-
-		// rootBlock, err := dataBuffer.FetchBlock(controlBlock.BTreeRootBlock())
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// indexRoot := core.CreateBTreeLeaf(rootBlock)
-		// dataBuffer.MarkAsDirty(indexRoot.DataBlockID())
-
-		blockMap := repo.DataBlocksMap()
-		// REFACTOR: This 5 should be calculated somehow
-		for i := uint16(0); i < 5; i++ {
-			blockMap.MarkAsUsed(i)
-		}
-
-		if err := dataBuffer.Sync(); err != nil {
-			return nil, err
-		}
-	}
-	return jsonDB, nil
+	return &simpleJSONDB{dataFile, repo, dataBuffer}, nil
 }
 
 func (db *simpleJSONDB) Close() error {

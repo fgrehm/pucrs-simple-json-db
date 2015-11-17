@@ -1,5 +1,7 @@
 package test_utils
 
+import "fmt"
+
 // An in memory data file does what it says and allows us to avoid hitting
 // the FS during tests
 type InMemoryDataFile struct {
@@ -23,6 +25,9 @@ func NewFakeDataFile(blocks [][]byte) *InMemoryDataFile {
 			return nil
 		},
 		ReadBlockFunc: func(id uint16, data []byte) error {
+			if id < 0 || id >= uint16(len(blocks)) {
+				return fmt.Errorf("Invalid datablock requested: %d", id)
+			}
 			block := blocks[id]
 			for i := 0; i < len(block); i++ {
 				data[i] = block[i]

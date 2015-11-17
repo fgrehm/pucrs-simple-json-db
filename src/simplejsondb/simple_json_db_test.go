@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	jsondb "simplejsondb"
-	// "simplejsondb/core"
 	"simplejsondb/dbio"
 
 	utils "test_utils"
@@ -37,7 +36,7 @@ func TestSimpleJSONDB_InitializesDataFile(t *testing.T) {
 	}
 
 	blocksBitMap := dbio.NewBitMapFromBytes(blocksBitMapBlock)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		val, err := blocksBitMap.Get(i)
 		if err != nil {
 			t.Fatal(err)

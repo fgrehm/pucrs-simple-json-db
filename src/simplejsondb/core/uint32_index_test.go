@@ -138,18 +138,11 @@ func createIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity i
 		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
 	}
 	fakeDataFile := utils.NewFakeDataFile(blocks)
-	dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
-	testRepo := core.NewDataBlockRepository(dataBuffer)
-
-	controlBlock := testRepo.ControlBlock()
-	controlBlock.Format()
-	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
-
-	blockMap := testRepo.DataBlocksMap()
-	for i := uint16(0); i < 4; i++ {
-		blockMap.MarkAsUsed(i)
+	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
+		t.Fatal(err)
 	}
 
+	dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
 	index := core.NewUint32Index(dataBuffer, branchCapacity, leafCapacity)
 	index.Init()
 	return index
