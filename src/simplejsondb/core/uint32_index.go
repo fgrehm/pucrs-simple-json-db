@@ -40,7 +40,7 @@ func NewUint32Index(buffer dbio.DataBuffer, branchCapacity, leafCapacity int) Ui
 }
 
 type index struct {
-	tree bplustree.BPlusTree
+	tree    bplustree.BPlusTree
 	adapter *uint32IndexNodeAdapter
 }
 
@@ -55,7 +55,7 @@ func (i *index) All(iterator RowIDsIterator) error {
 }
 
 func (i *index) Delete(key uint32) error {
-	panic("NOT WORKING YET")
+	return i.tree.Delete(Uint32Key(key))
 }
 
 func (i *index) Find(key uint32) (RowID, error) {

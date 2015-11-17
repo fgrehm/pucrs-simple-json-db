@@ -27,21 +27,19 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 	totalEntries := branchCapacity * leafCapacity
 
 	secondHalf := []core.RowID{}
-	for i := totalEntries-1; i >= (totalEntries / 2)-1; i-- {
+	for i := totalEntries - 1; i >= (totalEntries/2)-1; i-- {
 		key := i + 1
 		rowID := core.RowID{LocalID: uint16(key)}
 		assertIndexCanInsertAndFind(t, index, key, rowID)
 		secondHalf = append([]core.RowID{rowID}, secondHalf...)
 	}
-
 	firstHalf := []core.RowID{}
-	for i := 0; i < (totalEntries / 2)-1; i++ {
+	for i := 0; i < (totalEntries/2)-1; i++ {
 		key := i + 1
 		rowID := core.RowID{LocalID: uint16(key)}
 		assertIndexCanInsertAndFind(t, index, key, rowID)
 		firstHalf = append(firstHalf, rowID)
 	}
-
 	rowIDsInOrder := append(firstHalf, secondHalf...)
 	indexAllWasCalled := false
 	position := 0
@@ -93,10 +91,10 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 	sort.Sort(sort.Reverse(sort.IntSlice(secondHalf)))
 
 	for _, key := range secondHalf {
-		assertTreeCanDeleteByKey(t, index, key)
+		assertIndexCanDeleteByKey(t, index, key)
 	}
 	for _, key := range firstHalf {
-		assertTreeCanDeleteByKey(t, index, key)
+		assertIndexCanDeleteByKey(t, index, key)
 	}
 }
 
@@ -134,12 +132,12 @@ func insertOnIndex(t *testing.T, index core.Uint32Index, key int, rowID core.Row
 	}
 }
 
-func assertTreeCanDeleteByKey(t *testing.T, index core.Uint32Index, key int) {
+func assertIndexCanDeleteByKey(t *testing.T, index core.Uint32Index, key int) {
 	index.Delete(uint32(key))
-	assertTreeCantFindByKey(t, index, key)
+	assertIndexCantFindByKey(t, index, key)
 }
 
-func assertTreeCantFindByKey(t *testing.T, index core.Uint32Index, key int) {
+func assertIndexCantFindByKey(t *testing.T, index core.Uint32Index, key int) {
 	if _, err := index.Find(uint32(key)); err == nil {
 		t.Error("Did not remove key from index")
 	}
@@ -160,7 +158,7 @@ func assertIndexCanInsertAndFind(t *testing.T, index core.Uint32Index, key int, 
 	return core.Uint32Key(key), rowID
 }
 
-func assertTreeItemsAreSame(t *testing.T, index core.Uint32Index, rowIDs []core.RowID) {
+func assertIndexItemsAreSame(t *testing.T, index core.Uint32Index, rowIDs []core.RowID) {
 	i := 0
 	funcCalled := false
 	index.All(func(rowID core.RowID) {

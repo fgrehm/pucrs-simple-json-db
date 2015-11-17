@@ -221,15 +221,6 @@ func (b *inMemoryBranch) EntryAt(position int) BranchEntry {
 	return b.entries[position]
 }
 
-func (b *inMemoryBranch) Append(key Key, gteNodeID NodeID) {
-	entry := BranchEntry{
-		Key:                           key,
-		LowerThanKeyNodeID:            b.entries[len(b.entries)-1].LowerThanKeyNodeID,
-		GreaterThanOrEqualToKeyNodeID: gteNodeID,
-	}
-	b.entries = append(b.entries, entry)
-}
-
 func (l *inMemoryBranch) DeleteAt(position int) BranchEntry {
 	entry := l.entries[position]
 	if position == len(l.entries)-1 {

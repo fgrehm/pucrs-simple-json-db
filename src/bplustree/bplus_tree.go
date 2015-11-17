@@ -339,10 +339,11 @@ func (t *bPlusTree) Find(key Key) (Item, error) {
 func (t *bPlusTree) All(iterator LeafEntriesIterator) error {
 	leaf := t.adapter.LoadFirstLeaf()
 	for leaf != nil {
+		rightID := leaf.RightSiblingID()
 		if err := leaf.All(iterator); err != nil {
 			return err
 		}
-		leaf = t.adapter.LoadLeaf(leaf.RightSiblingID())
+		leaf = t.adapter.LoadLeaf(rightID)
 	}
 	return nil
 }

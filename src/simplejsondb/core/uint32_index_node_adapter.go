@@ -37,7 +37,7 @@ type uint32IndexNodeAdapter struct {
 }
 
 type uint32IndexNode struct {
-	block *dbio.DataBlock
+	block   *dbio.DataBlock
 	adapter *uint32IndexNodeAdapter
 }
 
@@ -253,7 +253,7 @@ func (l *uint32IndexLeafNode) ItemAt(position int) bplustree.Item {
 	readOffset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_LEAF_ENTRY_SIZE)
 	return RowID{
 		DataBlockID: l.block.ReadUint16(readOffset + BTREE_LEAF_OFFSET_BLOCK_ID),
-		LocalID: l.block.ReadUint16(readOffset + BTREE_LEAF_OFFSET_LOCAL_ID),
+		LocalID:     l.block.ReadUint16(readOffset + BTREE_LEAF_OFFSET_LOCAL_ID),
 	}
 }
 
@@ -318,16 +318,6 @@ func (b *uint32IndexBranchNode) readEntry(offset int) bplustree.BranchEntry {
 		LowerThanKeyNodeID:            Uint16ID(b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID)),
 		GreaterThanOrEqualToKeyNodeID: Uint16ID(b.block.ReadUint16(offset + BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID)),
 	}
-}
-
-func (b *uint32IndexBranchNode) Append(key bplustree.Key, gteNodeID bplustree.NodeID) {
-	panic("NOT WORKING YET")
-	// entry := bplustree.BranchEntry{
-	//   bplustree.Key:                           key,
-	//   LowerThanKeyNodeID:            b.entries[len(b.entries)-1].LowerThanKeyNodeID,
-	//   GreaterThanOrEqualToKeyNodeID: gteNodeID,
-	// }
-	// b.entries = append(b.entries, entry)
 }
 
 func (l *uint32IndexBranchNode) DeleteAt(position int) bplustree.BranchEntry {
@@ -398,7 +388,7 @@ func (b *uint32IndexBranchNode) InsertAt(position int, key bplustree.Key, greate
 
 	// When we add an entry to a branch, we keep the LowerThanKeyNodeID around.
 	// In order to update it we should use the Unshift method
-	b.block.Unshift(writeOffset+ int(BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID), BTREE_BRANCH_ENTRY_JUMP)
+	b.block.Unshift(writeOffset+int(BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID), BTREE_BRANCH_ENTRY_JUMP)
 	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_KEY, uint32Key)
 	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_RIGHT_BLOCK_ID, gteNodeID)
 
