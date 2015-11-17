@@ -24,7 +24,7 @@ type Node interface {
 	KeyAt(position int) Key
 	TotalKeys() int
 }
-type NodeID interface{
+type NodeID interface {
 	Equals(other NodeID) bool
 }
 

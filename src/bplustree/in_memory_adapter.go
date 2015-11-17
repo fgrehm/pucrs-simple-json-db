@@ -16,11 +16,13 @@ func NewInMemoryAdapter() *InMemoryAdapter {
 }
 
 type Uint32Key uint32
+
 func (k Uint32Key) Less(other Key) bool {
 	return k < other.(Uint32Key)
 }
 
 type Uint16ID uint16
+
 func (i Uint16ID) Equals(other NodeID) bool {
 	return i == other.(Uint16ID)
 }
