@@ -370,7 +370,7 @@ func (b *uint32IndexBranchNode) ReplaceKeyAt(position int, key bplustree.Key) {
 	uint32Key := uint32(key.(Uint32Key))
 	log.Printf("IDX_BRANCH_REPLACE_KEY nodeID=%d, position=%d, newKey=%d", b.block.ID, position, uint32Key)
 
-	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_BRANCH_ENTRY_JUMP)+int(BTREE_BRANCH_OFFSET_KEY)
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_BRANCH_ENTRY_JUMP) + int(BTREE_BRANCH_OFFSET_KEY)
 	b.block.Write(offset, uint32Key)
 }
 

@@ -68,6 +68,7 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 }
 
 type sortableRowIDs []core.RowID
+
 func (s sortableRowIDs) Len() int {
 	return len(s)
 }
@@ -97,7 +98,7 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 			end = totalEntries
 		}
 		for i := start; i < end; i++ {
-			key := i*50 + h+1
+			key := i*50 + h + 1
 			rowID := core.RowID{LocalID: uint16(key)}
 			assertIndexCanInsertAndFind(t, index, key, rowID)
 			keys = append(keys, key)
