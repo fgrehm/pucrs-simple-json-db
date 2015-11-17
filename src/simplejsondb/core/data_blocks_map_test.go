@@ -9,12 +9,7 @@ import (
 )
 
 func TestDataBlocksMap(t *testing.T) {
-	blocks := [][]byte{
-		nil,
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-	}
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(3)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 2)
 	dbm := &dataBlocksMap{dataBuffer}
 

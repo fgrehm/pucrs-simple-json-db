@@ -1,6 +1,9 @@
 package test_utils
 
-import "fmt"
+import (
+	"fmt"
+	"simplejsondb/dbio"
+)
 
 // An in memory data file does what it says and allows us to avoid hitting
 // the FS during tests
@@ -11,7 +14,15 @@ type InMemoryDataFile struct {
 	WriteBlockFunc func(uint16, []byte) error
 }
 
-func NewFakeDataFile(blocks [][]byte) *InMemoryDataFile {
+func NewFakeDataFile(blocksCount int) *InMemoryDataFile {
+	blocks := [][]byte{}
+	for i := 0; i < blocksCount; i++ {
+		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
+	}
+	return NewFakeDataFileWithBlocks(blocks)
+}
+
+func NewFakeDataFileWithBlocks(blocks [][]byte) *InMemoryDataFile {
 	return &InMemoryDataFile{
 		Blocks: blocks,
 		CloseFunc: func() error {

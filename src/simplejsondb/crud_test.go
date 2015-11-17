@@ -5,17 +5,11 @@ import (
 	"testing"
 
 	jsondb "simplejsondb"
-	dbio "simplejsondb/dbio"
 	utils "test_utils"
 )
 
 func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
-	blocks := [][]byte{}
-	for i := 0; i < 31; i++ {
-		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
-	}
-
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(30)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)
@@ -40,12 +34,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 }
 
 func TestCreateAndRemoveRecords(t *testing.T) {
-	blocks := [][]byte{}
-	for i := 0; i < 5; i++ {
-		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
-	}
-
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(4)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)
@@ -71,12 +60,7 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 }
 
 func TestCreateAndUpdateRecords(t *testing.T) {
-	blocks := [][]byte{}
-	for i := 0; i < 15; i++ {
-		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
-	}
-
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(14)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)

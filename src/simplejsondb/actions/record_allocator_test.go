@@ -11,14 +11,7 @@ import (
 )
 
 func TestRecordAllocator_Add(t *testing.T) {
-	blocks := [][]byte{
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		nil,
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-	}
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}
@@ -65,17 +58,8 @@ func TestRecordAllocator_Add(t *testing.T) {
 }
 
 func TestRecordAllocator_Remove(t *testing.T) {
-	blocks := [][]byte{
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		nil,
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-	}
-	fakeDataFile := utils.NewFakeDataFile(blocks)
-	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 10)
+	fakeDataFile := utils.NewFakeDataFile(7)
+	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}
@@ -139,14 +123,7 @@ func TestRecordAllocator_Remove(t *testing.T) {
 }
 
 func TestRecordAllocator_Update(t *testing.T) {
-	blocks := [][]byte{
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		nil,
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-	}
-	fakeDataFile := utils.NewFakeDataFile(blocks)
+	fakeDataFile := utils.NewFakeDataFile(5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}
@@ -201,19 +178,8 @@ func TestRecordAllocator_Update(t *testing.T) {
 }
 
 func TestRecordAllocator_ChainedRows(t *testing.T) {
-	blocks := [][]byte{
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		nil,
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-		make([]byte, dbio.DATABLOCK_SIZE),
-	}
-	fakeDataFile := utils.NewFakeDataFile(blocks)
-	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 10)
+	fakeDataFile := utils.NewFakeDataFile(9)
+	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}

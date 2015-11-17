@@ -11,7 +11,7 @@ import (
 
 func TestFetchesBlockFromDataFile(t *testing.T) {
 	fakeDataBlock := []byte{0x10, 0xF0}
-	fakeDataFile := utils.NewFakeDataFile([][]byte{nil, fakeDataBlock})
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{nil, fakeDataBlock})
 
 	dataBlock, err := dbio.NewDataBuffer(fakeDataFile, 1).FetchBlock(1)
 	if err != nil {
@@ -26,7 +26,7 @@ func TestFetchesBlockFromDataFile(t *testing.T) {
 }
 
 func TestFetchBlockCachesData(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile([][]byte{nil, []byte{}})
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{nil, []byte{}})
 
 	readCount := 0
 	original := fakeDataFile.ReadBlockFunc
@@ -46,7 +46,7 @@ func TestFetchBlockCachesData(t *testing.T) {
 }
 
 func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
@@ -83,7 +83,7 @@ func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
 
 func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	fakeDataBlock := []byte{0x00, 0x01, 0x02}
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		fakeDataBlock, []byte{}, []byte{},
 	})
 
@@ -117,7 +117,7 @@ func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 }
 
 func TestDiscardsUnmodifiedFrames(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
@@ -142,7 +142,7 @@ func TestDiscardsUnmodifiedFrames(t *testing.T) {
 }
 
 func TestSavesDirtyFramesOnSync(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		[]byte{}, []byte{}, []byte{},
 	})
 
@@ -191,7 +191,7 @@ func TestSavesDirtyFramesOnSync(t *testing.T) {
 }
 
 func TestReturnsErrorsWhenSyncing(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		[]byte{}, []byte{},
 	})
 	expectedError := errors.New("BOOM")

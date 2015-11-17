@@ -13,7 +13,7 @@ func TestSimpleJSONDB_InitializesDataFile(t *testing.T) {
 	firstDataBlock := make([]byte, 10)
 	blocksBitMapBlock := make([]byte, dbio.DATABLOCK_SIZE)
 	bTreeRootBlock := make([]byte, 2)
-	fakeDataFile := utils.NewFakeDataFile([][]byte{
+	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
 		firstDataBlock,
 		blocksBitMapBlock,
 		nil,
