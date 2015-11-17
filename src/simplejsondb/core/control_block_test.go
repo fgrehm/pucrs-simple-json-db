@@ -36,7 +36,7 @@ func TestControlBlock_IndexRootBlockID(t *testing.T) {
 		t.Errorf("Root BTree datablock pointer was not read, got %d and expected %d", blockID, 9)
 	}
 
-	cb.SetBTreeRootBlock(901)
+	cb.SetIndexRootBlockID(901)
 	if id := cb.IndexRootBlockID(); id != 901 {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 901)
 	}

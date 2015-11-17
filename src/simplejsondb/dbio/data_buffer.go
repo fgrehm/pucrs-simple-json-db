@@ -83,6 +83,9 @@ func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 func (db *dataBuffer) MarkAsDirty(dataBlockID uint16) error {
 	log.Debugf("DIRTY blockid=%d", dataBlockID)
 	frame := db.idToFrame[dataBlockID]
+	if frame == nil {
+		panic("Tried to mark as dirty a block that is no longer on the buffer")
+	}
 	frame.isDirty = true
 	return nil
 }

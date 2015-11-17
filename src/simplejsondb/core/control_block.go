@@ -18,8 +18,8 @@ type ControlBlock interface {
 	SetFirstRecordDataBlock(dataBlockID uint16)
 	NextAvailableRecordsDataBlockID() uint16
 	SetNextAvailableRecordsDataBlockID(dataBlockID uint16)
+	SetIndexRootBlockID(blockID uint16)
 	IndexRootBlockID() uint16
-	SetBTreeRootBlock(blockID uint16)
 	SetFirstLeaf(blockID uint16)
 	FirstLeaf() uint16
 }
@@ -58,12 +58,12 @@ func (cb *controlBlock) FirstLeaf() uint16 {
 	return cb.block.ReadUint16(POS_BTREE_FIRST_LEAF)
 }
 
-func (cb *controlBlock) IndexRootBlockID() uint16 {
-	return cb.block.ReadUint16(POS_BTREE_ROOT)
+func (cb *controlBlock) SetIndexRootBlockID(blockID uint16) {
+	cb.block.Write(POS_BTREE_ROOT, blockID)
 }
 
-func (cb *controlBlock) SetBTreeRootBlock(blockID uint16) {
-	cb.block.Write(POS_BTREE_ROOT, blockID)
+func (cb *controlBlock) IndexRootBlockID() uint16 {
+	return cb.block.ReadUint16(POS_BTREE_ROOT)
 }
 
 func (cb *controlBlock) NextAvailableRecordsDataBlockID() uint16 {

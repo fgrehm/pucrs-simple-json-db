@@ -25,20 +25,23 @@ type Uint32Index interface {
 	All(iterator RowIDsIterator) error
 	Delete(key uint32) error
 	Init()
+	Dump()
 }
 
 func NewUint32Index(buffer dbio.DataBuffer, branchCapacity, leafCapacity int) Uint32Index {
 	repo := NewDataBlockRepository(buffer)
+	adapter := &uint32IndexNodeAdapter{buffer, repo}
 	tree := bplustree.New(bplustree.Config{
-		Adapter:        &uint32IndexNodeAdapter{buffer, repo},
+		Adapter:        adapter,
 		LeafCapacity:   leafCapacity,
 		BranchCapacity: branchCapacity,
 	})
-	return &index{tree}
+	return &index{tree, adapter}
 }
 
 type index struct {
 	tree bplustree.BPlusTree
+	adapter *uint32IndexNodeAdapter
 }
 
 func (i *index) Init() {
@@ -56,9 +59,18 @@ func (i *index) Delete(key uint32) error {
 }
 
 func (i *index) Find(key uint32) (RowID, error) {
-	panic("NOT WORKING YET")
+	item, err := i.tree.Find(Uint32Key(key))
+	if err != nil {
+		return RowID{}, err
+	}
+
+	return item.(RowID), err
 }
 
 func (i *index) Insert(key uint32, rowID RowID) error {
 	return i.tree.Insert(Uint32Key(key), rowID)
+}
+
+func (i *index) Dump() {
+	bplustree.DebugTree(i.tree, i.adapter)
 }

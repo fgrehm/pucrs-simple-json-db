@@ -15,25 +15,47 @@ import (
 func TestUint32Index_BasicOperations(t *testing.T) {
 	branchCapacity := 6
 	leafCapacity := 4
-	index := createIndex(t, 30, 5, branchCapacity, leafCapacity)
+	index := createIndex(t, 30, 20, branchCapacity, leafCapacity)
 
 	err := index.All(func(rowID core.RowID) {
-		t.Errorf("Index should be blank but found the following rowid: %+v", rowID)
+		t.Fatalf("Index should be blank but found the following rowid: %+v", rowID)
 	})
 	if err != nil {
 		t.Fatalf("Error while reading all entries from the tree: %s", err)
 	}
 
-	rowIDsInOrder := []core.RowID{}
 	totalEntries := branchCapacity * leafCapacity
-	for i := totalEntries / 2; i < totalEntries; i++ {
+
+	secondHalf := []core.RowID{}
+	for i := totalEntries-1; i >= (totalEntries / 2)-1; i-- {
 		key := i + 1
 		rowID := core.RowID{LocalID: uint16(key)}
 		assertIndexCanInsertAndFind(t, index, key, rowID)
-		rowIDsInOrder = append(rowIDsInOrder, rowID)
+		secondHalf = append([]core.RowID{rowID}, secondHalf...)
 	}
-	// Insert a handful of entries out of order to trigger a split
-	// Ensure entries are returned in order
+
+	firstHalf := []core.RowID{}
+	for i := 0; i < (totalEntries / 2)-1; i++ {
+		key := i + 1
+		rowID := core.RowID{LocalID: uint16(key)}
+		assertIndexCanInsertAndFind(t, index, key, rowID)
+		firstHalf = append(firstHalf, rowID)
+	}
+
+	rowIDsInOrder := append(firstHalf, secondHalf...)
+	indexAllWasCalled := false
+	position := 0
+	index.All(func(rowID core.RowID) {
+		indexAllWasCalled = true
+		if rowID != rowIDsInOrder[position] {
+			t.Errorf("Found an invalid RowID at %d, got %+v, expected %+v", position, rowID, rowIDsInOrder[position])
+		}
+		position++
+	})
+	if !indexAllWasCalled {
+		t.Fatal("The function provided to Index.All was not called")
+	}
+
 	// Delete everything from the tree
 	// Ensure nothing gets returned
 }
@@ -97,7 +119,7 @@ func createIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity i
 	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
 	blockMap := testRepo.DataBlocksMap()
-	for i := uint16(0); i < 5; i++ {
+	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
 
