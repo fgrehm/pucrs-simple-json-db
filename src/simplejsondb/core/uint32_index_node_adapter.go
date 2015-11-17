@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 
 	"bplustree"
@@ -53,6 +54,7 @@ func (a *uint32IndexNodeAdapter) SetRoot(node bplustree.Node) {
 
 	nodeID := uint16(node.ID().(Uint16ID))
 	log.Infof("IDX_SET_ROOT %d", nodeID)
+	node.SetParentID(Uint16ID(0))
 
 	cb.SetIndexRootBlockID(nodeID)
 	a.buffer.MarkAsDirty(cb.DataBlockID())
@@ -99,9 +101,6 @@ func (a *uint32IndexNodeAdapter) LoadNode(id bplustree.NodeID) bplustree.Node {
 func (a *uint32IndexNodeAdapter) loadNode(id bplustree.NodeID) *uint32IndexNode {
 	log.Debugf("IDX_LOAD nodeID=%d", id)
 	nodeID := uint16(id.(Uint16ID))
-	if nodeID == 20 {
-		panic("WHAT")
-	}
 	if nodeID == 0 {
 		return nil
 	}
@@ -109,8 +108,10 @@ func (a *uint32IndexNodeAdapter) loadNode(id bplustree.NodeID) *uint32IndexNode 
 }
 
 func (a *uint32IndexNodeAdapter) Free(node bplustree.Node) {
-	panic("NOT WORKING YET")
-	// delete(a.Nodes, node.ID().(Uint16ID))
+	nodeID := uint16(node.ID().(Uint16ID))
+	log.Infof("IDX_FREE nodeID=%d", nodeID)
+	dataBlocksMap := &dataBlocksMap{a.buffer}
+	dataBlocksMap.MarkAsFree(nodeID)
 }
 
 func (a *uint32IndexNodeAdapter) CreateLeaf() bplustree.LeafNode {
@@ -129,6 +130,10 @@ func (a *uint32IndexNodeAdapter) allocateBlock() *dbio.DataBlock {
 		panic(err)
 	}
 	blocksMap.MarkAsUsed(blockID)
+	block.Write(BTREE_POS_TOTAL_KEYS, uint16(0))
+	block.Write(BTREE_POS_PARENT_ID, uint16(0))
+	block.Write(BTREE_POS_RIGHT_SIBLING, uint16(0))
+	block.Write(BTREE_POS_LEFT_SIBLING, uint16(0))
 	return block
 }
 
@@ -146,7 +151,7 @@ func (a *uint32IndexNodeAdapter) LoadLeaf(id bplustree.NodeID) bplustree.LeafNod
 	if node == nil {
 		return nil
 	} else {
-		log.Debugf("IDX_LOADED nodeID=%d", id)
+		log.Debugf("IDX_LEAF_LOADED nodeID=%d", id)
 		return &uint32IndexLeafNode{node}
 	}
 }
@@ -174,7 +179,7 @@ func (a *uint32IndexNodeAdapter) LoadBranch(id bplustree.NodeID) bplustree.Branc
 	if node == nil {
 		return nil
 	} else {
-		log.Debugf("IDX_LOADED nodeID=%d", id)
+		log.Debugf("IDX_BRANCH_LOADED nodeID=%d", id)
 		return &uint32IndexBranchNode{node}
 	}
 }
@@ -202,6 +207,7 @@ func (n *uint32IndexNode) ParentID() bplustree.NodeID {
 func (n *uint32IndexNode) SetParentID(id bplustree.NodeID) {
 	log.Infof("IDX_NODE_SET_PARENT nodeID=%d, parentID=%d", id, n.block.ID)
 	n.block.Write(BTREE_POS_PARENT_ID, uint16(id.(Uint16ID)))
+	n.adapter.markAsDirty(n)
 }
 
 func (n *uint32IndexNode) LeftSiblingID() bplustree.NodeID {
@@ -258,10 +264,20 @@ func (l *uint32IndexLeafNode) ItemAt(position int) bplustree.Item {
 }
 
 func (l *uint32IndexLeafNode) DeleteAt(position int) bplustree.LeafEntry {
-	panic("NOT WORKING YET")
-	// deleted := l.entries[position]
-	// l.entries = append(l.entries[:position], l.entries[position+1:]...)
-	// return deleted
+	totalKeys := l.TotalKeys()
+	if position < 0 || position >= totalKeys {
+		panic("Invalid position to be deleted")
+	}
+
+	log.Printf("IDX_LEAF_DELETE nodeID=%d, position=%d, totalKeys=%d", l.block.ID, position, totalKeys)
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_LEAF_ENTRY_SIZE)
+	entry := l.readEntry(offset)
+
+	copy(l.block.Data[offset:], l.block.Data[offset+BTREE_LEAF_ENTRY_SIZE:])
+	l.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys-1))
+	l.adapter.markAsDirty(l.uint32IndexNode)
+
+	return entry
 }
 
 func (l *uint32IndexLeafNode) DeleteFrom(startPosition int) bplustree.LeafEntries {
@@ -308,6 +324,10 @@ func (b *uint32IndexBranchNode) KeyAt(position int) bplustree.Key {
 }
 
 func (b *uint32IndexBranchNode) EntryAt(position int) bplustree.BranchEntry {
+	totalKeys := b.TotalKeys()
+	if position < 0 || position >= totalKeys {
+		panic(fmt.Sprintf("Invalid position to load: %d (total keys = %d)", position, totalKeys))
+	}
 	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_BRANCH_ENTRY_JUMP)
 	return b.readEntry(offset)
 }
@@ -320,23 +340,46 @@ func (b *uint32IndexBranchNode) readEntry(offset int) bplustree.BranchEntry {
 	}
 }
 
-func (l *uint32IndexBranchNode) DeleteAt(position int) bplustree.BranchEntry {
-	panic("NOT WORKING YET")
-	// entry := l.entries[position]
-	// if position == len(l.entries)-1 {
-	//   l.entries = l.entries[0:position]
-	// } else if position == 0 {
-	//   l.entries = l.entries[1:]
-	// } else {
-	//   l.entries[position+1].LowerThanKeyNodeID = l.entries[position-1].GreaterThanOrEqualToKeyNodeID
-	//   l.entries = append(l.entries[:position], l.entries[position+1:]...)
-	// }
-	// return entry
+func (b *uint32IndexBranchNode) DeleteAt(position int) bplustree.BranchEntry {
+	totalKeys := b.TotalKeys()
+	log.Printf("IDX_BRANCH_DELETE nodeID=%d, position=%d, totalKeys=%d", b.block.ID, position, totalKeys)
+	if position < 0 || position >= totalKeys {
+		panic("Invalid position to be deleted")
+	}
+
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_BRANCH_ENTRY_JUMP)
+	entry := b.readEntry(offset)
+
+	if position == totalKeys-1 {
+		b.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys-1))
+		return entry
+	}
+
+	println("BEFORE", offset)
+	fmt.Printf("% x\n", b.block.Data[BTREE_POS_ENTRIES_OFFSET:totalKeys*19])
+	fmt.Printf("% x\n", b.block.Data[:totalKeys*19])
+
+	copy(b.block.Data[offset:], b.block.Data[offset+BTREE_BRANCH_ENTRY_JUMP:])
+	b.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys-1))
+
+	println("AFTER")
+	fmt.Printf("% x\n", b.block.Data[BTREE_POS_ENTRIES_OFFSET:totalKeys*19])
+	fmt.Printf("% x\n", b.block.Data[:totalKeys*19])
+
+	return entry
 }
 
 func (b *uint32IndexBranchNode) ReplaceKeyAt(position int, key bplustree.Key) {
-	panic("NOT WORKING YET")
-	// b.entries[position].Key = key
+	totalKeys := b.TotalKeys()
+	if position < 0 || position >= totalKeys {
+		panic("Invalid position to be replaced")
+	}
+
+	uint32Key := uint32(key.(Uint32Key))
+	log.Printf("IDX_BRANCH_REPLACE_KEY nodeID=%d, position=%d, newKey=%d", b.block.ID, position, uint32Key)
+
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + position*int(BTREE_BRANCH_ENTRY_JUMP)+int(BTREE_BRANCH_OFFSET_KEY)
+	b.block.Write(offset, uint32Key)
 }
 
 func (b *uint32IndexBranchNode) DeleteFrom(startPosition int) bplustree.BranchEntries {
@@ -358,10 +401,11 @@ func (b *uint32IndexBranchNode) DeleteFrom(startPosition int) bplustree.BranchEn
 }
 
 func (b *uint32IndexBranchNode) Shift() {
-	panic("NOT WORKING YET")
-	// ltNodeID := b.entries[0].LowerThanKeyNodeID
-	// b.entries = b.entries[1:]
-	// b.entries[0].LowerThanKeyNodeID = ltNodeID
+	log.Printf("IDX_BRANCH_SHIFT nodeID=%d", b.block.ID)
+	offset := int(BTREE_POS_ENTRIES_OFFSET) + BTREE_BRANCH_OFFSET_KEY
+	copy(b.block.Data[offset:], b.block.Data[offset+BTREE_BRANCH_ENTRY_JUMP:])
+	totalKeys := int(b.block.ReadUint16(BTREE_POS_TOTAL_KEYS))
+	b.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys-1))
 }
 
 func (b *uint32IndexBranchNode) All(iterator bplustree.BranchEntriesIterator) error {
@@ -398,11 +442,16 @@ func (b *uint32IndexBranchNode) InsertAt(position int, key bplustree.Key, greate
 }
 
 func (b *uint32IndexBranchNode) Unshift(key bplustree.Key, lowerThanKeyNodeID bplustree.NodeID) {
-	panic("NOT WORKING YET")
-	// entry := bplustree.BranchEntry{
-	//   bplustree.Key:                           key,
-	//   LowerThanKeyNodeID:            lowerThanKeyNodeID,
-	//   GreaterThanOrEqualToKeyNodeID: b.entries[0].LowerThanKeyNodeID,
-	// }
-	// b.entries = append(BranchEntries{entry}, b.entries...)
+	uint32Key := uint32(key.(Uint32Key))
+	ltKeyNodeID := uint16(lowerThanKeyNodeID.(Uint16ID))
+	writeOffset := int(BTREE_POS_ENTRIES_OFFSET)
+
+	b.block.Unshift(writeOffset+int(BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID), BTREE_BRANCH_ENTRY_JUMP)
+	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_KEY, uint32Key)
+	b.block.Write(writeOffset+BTREE_BRANCH_OFFSET_LEFT_BLOCK_ID, ltKeyNodeID)
+
+	totalKeys := b.TotalKeys() + 1
+	b.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys))
+
+	b.adapter.markAsDirty(b.uint32IndexNode)
 }

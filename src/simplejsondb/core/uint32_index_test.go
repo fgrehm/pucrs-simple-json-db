@@ -26,6 +26,7 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 
 	totalEntries := branchCapacity * leafCapacity
 
+	// Fill in the tree in descending / ascending order, one half at a time
 	secondHalf := []core.RowID{}
 	for i := totalEntries - 1; i >= (totalEntries/2)-1; i-- {
 		key := i + 1
@@ -41,6 +42,8 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 		firstHalf = append(firstHalf, rowID)
 	}
 	rowIDsInOrder := append(firstHalf, secondHalf...)
+
+	// Can we retrieve the rowids from the tree?
 	indexAllWasCalled := false
 	position := 0
 	index.All(func(rowID core.RowID) {
@@ -54,16 +57,20 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 		t.Fatal("The function provided to Index.All was not called")
 	}
 
-	// Delete everything from the tree
-	// Ensure nothing gets returned
+	// Delete everything from the tree an ensure it has no records
+	for i := 0; i < totalEntries; i++ {
+		key := i + 1
+		assertIndexCanDeleteByKey(t, index, key)
+	}
+	index.All(func(rowID core.RowID) {
+		t.Fatal("No entries should be present on the index but found %+v", rowID)
+	})
 }
 
 func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
-	t.Fatal("TODO")
-
 	branchCapacity := 4
 	leafCapacity := 4
-	index := createIndex(t, 100, 20, branchCapacity, leafCapacity)
+	index := createIndex(t, 250, 256, branchCapacity, leafCapacity)
 	totalEntries := (branchCapacity + 1) * leafCapacity
 
 	keys := make([]int, 0, totalEntries*30)
@@ -77,13 +84,13 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 			end = totalEntries
 		}
 		for i := start; i < end; i++ {
-			key := i*50 + h
+			key := i*50 + h+1
 			assertIndexCanInsertAndFind(t, index, key, core.RowID{LocalID: uint16(key)})
 			keys = append(keys, key)
 		}
 	}
 
-	t.Fatal("TEST IF IS ORDERED BY COLLECTING THE ROW IDS INSERTED")
+	t.Errorf("TEST IF IS ORDERED BY COLLECTING THE ROW IDS INSERTED, CHECK AT EACH REMOVE IF THE ENTRY CAN BE FOUND")
 
 	sort.Ints(keys)
 	firstHalf := keys[len(keys)/2-1:]
