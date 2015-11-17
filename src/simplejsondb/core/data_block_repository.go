@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bplustree"
 	"simplejsondb/dbio"
 )
 
@@ -8,9 +9,9 @@ type DataBlockRepository interface {
 	ControlBlock() ControlBlock
 	DataBlocksMap() DataBlocksMap
 	RecordBlock(blockID uint16) RecordBlock
-	// BTreeNode(blockID uint16) BTreeNode
-	// BTreeBranch(blockID uint16) BTreeBranch
-	// BTreeLeaf(blockID uint16) BTreeLeaf
+	IndexNode(nodeID uint16) bplustree.Node
+	IndexBranch(nodeID uint16) bplustree.BranchNode
+	IndexLeaf(nodeID uint16) bplustree.LeafNode
 }
 
 type dataBlockRepository struct {
@@ -33,22 +34,22 @@ func (r *dataBlockRepository) RecordBlock(blockID uint16) RecordBlock {
 	return &recordBlock{r.fetchBlock(blockID)}
 }
 
-// func (r *dataBlockRepository) BTreeNode(blockID uint16) BTreeNode {
-// 	node := &bTreeNode{r.fetchBlock(blockID)}
-// 	if node.IsLeaf() {
-// 		return &bTreeLeaf{node}
-// 	} else {
-// 		return &bTreeBranch{node}
-// 	}
-// }
-//
-// func (r *dataBlockRepository) BTreeBranch(blockID uint16) BTreeBranch {
-// 	return &bTreeBranch{&bTreeNode{r.fetchBlock(blockID)}}
-// }
-//
-// func (r *dataBlockRepository) BTreeLeaf(blockID uint16) BTreeLeaf {
-// 	return &bTreeLeaf{&bTreeNode{r.fetchBlock(blockID)}}
-// }
+func (r *dataBlockRepository) IndexNode(nodeID uint16) bplustree.Node {
+	node := &uint32IndexNode{r.fetchBlock(nodeID)}
+	if node.isLeaf() {
+		return &uint32IndexLeafNode{node}
+	} else {
+		return &uint32IndexBranchNode{node}
+	}
+}
+
+func (r *dataBlockRepository) IndexBranch(nodeID uint16) bplustree.BranchNode {
+	return &uint32IndexBranchNode{&uint32IndexNode{r.fetchBlock(nodeID)}}
+}
+
+func (r *dataBlockRepository) IndexLeaf(nodeID uint16) bplustree.LeafNode {
+	return &uint32IndexLeafNode{&uint32IndexNode{r.fetchBlock(nodeID)}}
+}
 
 func (r *dataBlockRepository) fetchBlock(blockID uint16) *dbio.DataBlock {
 	block, err := r.buffer.FetchBlock(blockID)

@@ -1,128 +1,157 @@
 package core_test
 
 import (
-  "sort"
-  "testing"
+	"sort"
+	"testing"
 
-  "simplejsondb/core"
-  "simplejsondb/dbio"
+	"simplejsondb/core"
+	"simplejsondb/dbio"
 
-  utils "test_utils"
+	utils "test_utils"
 )
 
 // This is basically a copy and paste from the tests for the in memory B+Tree code
 
+func TestUint32Index_BasicOperations(t *testing.T) {
+	branchCapacity := 6
+	leafCapacity := 4
+	index := createIndex(t, 30, 5, branchCapacity, leafCapacity)
+
+	err := index.All(func(rowID core.RowID) {
+		t.Errorf("Index should be blank but found the following rowid: %+v", rowID)
+	})
+	if err != nil {
+		t.Fatalf("Error while reading all entries from the tree: %s", err)
+	}
+
+	rowIDsInOrder := []core.RowID{}
+	totalEntries := branchCapacity * leafCapacity
+	for i := totalEntries / 2; i < totalEntries; i++ {
+		key := i + 1
+		rowID := core.RowID{LocalID: uint16(key)}
+		assertIndexCanInsertAndFind(t, index, key, rowID)
+		rowIDsInOrder = append(rowIDsInOrder, rowID)
+	}
+	// Insert a handful of entries out of order to trigger a split
+	// Ensure entries are returned in order
+	// Delete everything from the tree
+	// Ensure nothing gets returned
+}
+
 func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
-  t.Fatal("TODO")
-  branchCapacity := 4
-  leafCapacity := 4
-  index := createIndex(t, 100, 20, branchCapacity, leafCapacity)
-  totalEntries := (branchCapacity + 1) * leafCapacity
+	t.Fatal("TODO")
 
-  keys := make([]int, 0, totalEntries*30)
-  for h := 0; h < 30; h++ {
-    var start, end int
-    if h%2 == 0 {
-      start = 0
-      end = totalEntries / 2
-    } else {
-      start = totalEntries/2 + 1
-      end = totalEntries
-    }
-    for i := start; i < end; i++ {
-      key := i*50 + h
-      assertIndexCanInsertAndFind(t, index, key, core.RowID{LocalID: uint16(key)})
-      keys = append(keys, key)
-    }
-  }
+	branchCapacity := 4
+	leafCapacity := 4
+	index := createIndex(t, 100, 20, branchCapacity, leafCapacity)
+	totalEntries := (branchCapacity + 1) * leafCapacity
 
-  t.Fatal("TEST IF IS ORDERED BY COLLECTING THE ROW IDS INSERTED")
+	keys := make([]int, 0, totalEntries*30)
+	for h := 0; h < 30; h++ {
+		var start, end int
+		if h%2 == 0 {
+			start = 0
+			end = totalEntries / 2
+		} else {
+			start = totalEntries/2 + 1
+			end = totalEntries
+		}
+		for i := start; i < end; i++ {
+			key := i*50 + h
+			assertIndexCanInsertAndFind(t, index, key, core.RowID{LocalID: uint16(key)})
+			keys = append(keys, key)
+		}
+	}
 
-  sort.Ints(keys)
-  firstHalf := keys[len(keys)/2-1:]
-  secondHalf := keys[:len(keys)/2]
-  sort.Sort(sort.Reverse(sort.IntSlice(secondHalf)))
+	t.Fatal("TEST IF IS ORDERED BY COLLECTING THE ROW IDS INSERTED")
 
-  for _, key := range secondHalf {
-    assertTreeCanDeleteByKey(t, index, key)
-  }
-  for _, key := range firstHalf {
-    assertTreeCanDeleteByKey(t, index, key)
-  }
+	sort.Ints(keys)
+	firstHalf := keys[len(keys)/2-1:]
+	secondHalf := keys[:len(keys)/2]
+	sort.Sort(sort.Reverse(sort.IntSlice(secondHalf)))
+
+	for _, key := range secondHalf {
+		assertTreeCanDeleteByKey(t, index, key)
+	}
+	for _, key := range firstHalf {
+		assertTreeCanDeleteByKey(t, index, key)
+	}
 }
 
 func createIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity int, leafCapacity int) core.Uint32Index {
-  blocks := [][]byte{
-    make([]byte, dbio.DATABLOCK_SIZE),
-    make([]byte, dbio.DATABLOCK_SIZE),
-    nil,
-    nil,
-  }
-  for i := 0; i < totalUsableBlocks; i++ {
-    blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
-  }
-  fakeDataFile := utils.NewFakeDataFile(blocks)
-  dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
-  testRepo := core.NewDataBlockRepository(dataBuffer)
+	blocks := [][]byte{
+		make([]byte, dbio.DATABLOCK_SIZE),
+		make([]byte, dbio.DATABLOCK_SIZE),
+		nil,
+		nil,
+	}
+	for i := 0; i < totalUsableBlocks; i++ {
+		blocks = append(blocks, make([]byte, dbio.DATABLOCK_SIZE))
+	}
+	fakeDataFile := utils.NewFakeDataFile(blocks)
+	dataBuffer := dbio.NewDataBuffer(fakeDataFile, bufferFrames)
+	testRepo := core.NewDataBlockRepository(dataBuffer)
 
-  controlBlock := testRepo.ControlBlock()
-  controlBlock.Format()
-  dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
+	controlBlock := testRepo.ControlBlock()
+	controlBlock.Format()
+	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
-  blockMap := testRepo.DataBlocksMap()
-  for i := uint16(0); i < 5; i++ {
-    blockMap.MarkAsUsed(i)
-  }
+	blockMap := testRepo.DataBlocksMap()
+	for i := uint16(0); i < 5; i++ {
+		blockMap.MarkAsUsed(i)
+	}
 
-  return core.NewUint32Index(dataBuffer, branchCapacity, leafCapacity)
+	index := core.NewUint32Index(dataBuffer, branchCapacity, leafCapacity)
+	index.Init()
+	return index
 }
 
 func insertOnIndex(t *testing.T, index core.Uint32Index, key int, rowID core.RowID) {
-  if err := index.Insert(uint32(key), rowID); err != nil {
-    t.Fatalf("Error inserting rowID with key %d: %s", key, err)
-  }
+	if err := index.Insert(uint32(key), rowID); err != nil {
+		t.Fatalf("Error inserting rowID with key %d: %s", key, err)
+	}
 }
 
 func assertTreeCanDeleteByKey(t *testing.T, index core.Uint32Index, key int) {
-  index.Delete(uint32(key))
-  assertTreeCantFindByKey(t, index, key)
+	index.Delete(uint32(key))
+	assertTreeCantFindByKey(t, index, key)
 }
 
 func assertTreeCantFindByKey(t *testing.T, index core.Uint32Index, key int) {
-  if _, err := index.Find(uint32(key)); err == nil {
-    t.Error("Did not remove key from index")
-  }
+	if _, err := index.Find(uint32(key)); err == nil {
+		t.Error("Did not remove key from index")
+	}
 }
 
 func assertIndexCanInsertAndFind(t *testing.T, index core.Uint32Index, key int, rowID core.RowID) (core.Uint32Key, core.RowID) {
-  insertOnIndex(t, index, key, rowID)
-  rowIDFound, err := index.Find(uint32(key))
-  if err != nil {
-    t.Fatalf("Error when trying to find rowID with key=%+v: %s", key, err)
-  }
-  if rowIDFound == (core.RowID{}) {
-    t.Errorf("Could not retrieve %d from index right after inserting it", key)
-  }
-  if rowIDFound != rowID {
-    t.Errorf("Invalid value returned from the index: %+v", rowIDFound)
-  }
-  return core.Uint32Key(key), rowID
+	insertOnIndex(t, index, key, rowID)
+	rowIDFound, err := index.Find(uint32(key))
+	if err != nil {
+		t.Fatalf("Error when trying to find rowID with key=%+v: %s", key, err)
+	}
+	if rowIDFound == (core.RowID{}) {
+		t.Errorf("Could not retrieve %d from index right after inserting it", key)
+	}
+	if rowIDFound != rowID {
+		t.Errorf("Invalid value returned from the index: %+v", rowIDFound)
+	}
+	return core.Uint32Key(key), rowID
 }
 
 func assertTreeItemsAreSame(t *testing.T, index core.Uint32Index, rowIDs []core.RowID) {
-  i := 0
-  funcCalled := false
-  index.All(func(rowID core.RowID) {
-    funcCalled = true
-    if rowID != rowIDs[i] {
-      t.Errorf("Invalid value returned from the index at %d: %+v (expected %+v)", i, rowID, rowIDs[i])
-    }
-    i++
-  })
-  if i != len(rowIDs) {
-    t.Errorf("Did not iterate over all entries")
-  }
-  if !funcCalled {
-    t.Errorf("Function passed to core.Uint32Index was not called")
-  }
+	i := 0
+	funcCalled := false
+	index.All(func(rowID core.RowID) {
+		funcCalled = true
+		if rowID != rowIDs[i] {
+			t.Errorf("Invalid value returned from the index at %d: %+v (expected %+v)", i, rowID, rowIDs[i])
+		}
+		i++
+	})
+	if i != len(rowIDs) {
+		t.Errorf("Did not iterate over all entries")
+	}
+	if !funcCalled {
+		t.Errorf("Function passed to core.Uint32Index was not called")
+	}
 }
