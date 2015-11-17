@@ -355,16 +355,8 @@ func (b *uint32IndexBranchNode) DeleteAt(position int) bplustree.BranchEntry {
 		return entry
 	}
 
-	println("BEFORE", offset)
-	fmt.Printf("% x\n", b.block.Data[BTREE_POS_ENTRIES_OFFSET:totalKeys*19])
-	fmt.Printf("% x\n", b.block.Data[:totalKeys*19])
-
 	copy(b.block.Data[offset:], b.block.Data[offset+BTREE_BRANCH_ENTRY_JUMP:])
 	b.block.Write(BTREE_POS_TOTAL_KEYS, uint16(totalKeys-1))
-
-	println("AFTER")
-	fmt.Printf("% x\n", b.block.Data[BTREE_POS_ENTRIES_OFFSET:totalKeys*19])
-	fmt.Printf("% x\n", b.block.Data[:totalKeys*19])
 
 	return entry
 }

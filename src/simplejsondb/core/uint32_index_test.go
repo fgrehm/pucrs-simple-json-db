@@ -67,6 +67,17 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 	})
 }
 
+type sortableRowIDs []core.RowID
+func (s sortableRowIDs) Len() int {
+	return len(s)
+}
+func (s sortableRowIDs) Less(i, j int) bool {
+	return s[i].LocalID < s[j].LocalID
+}
+func (s sortableRowIDs) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
 func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 	branchCapacity := 4
 	leafCapacity := 4
@@ -74,6 +85,8 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 	totalEntries := (branchCapacity + 1) * leafCapacity
 
 	keys := make([]int, 0, totalEntries*30)
+	rowIDs := make([]core.RowID, 0, len(keys))
+	// Here be dragons!
 	for h := 0; h < 30; h++ {
 		var start, end int
 		if h%2 == 0 {
@@ -85,23 +98,31 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 		}
 		for i := start; i < end; i++ {
 			key := i*50 + h+1
-			assertIndexCanInsertAndFind(t, index, key, core.RowID{LocalID: uint16(key)})
+			rowID := core.RowID{LocalID: uint16(key)}
+			assertIndexCanInsertAndFind(t, index, key, rowID)
 			keys = append(keys, key)
+			rowIDs = append(rowIDs, rowID)
 		}
 	}
 
-	t.Errorf("TEST IF IS ORDERED BY COLLECTING THE ROW IDS INSERTED, CHECK AT EACH REMOVE IF THE ENTRY CAN BE FOUND")
+	sort.Sort(sortableRowIDs(rowIDs))
+	assertIndexItemsAreSame(t, index, rowIDs)
 
 	sort.Ints(keys)
-	firstHalf := keys[len(keys)/2-1:]
-	secondHalf := keys[:len(keys)/2]
+	firstHalf := keys[:len(keys)/2]
+	secondHalf := keys[len(keys)/2:]
 	sort.Sort(sort.Reverse(sort.IntSlice(secondHalf)))
+
+	for _, key := range firstHalf {
+		assertIndexCanDeleteByKey(t, index, key)
+		rowIDs = rowIDs[1:]
+		assertIndexItemsAreSame(t, index, rowIDs)
+	}
 
 	for _, key := range secondHalf {
 		assertIndexCanDeleteByKey(t, index, key)
-	}
-	for _, key := range firstHalf {
-		assertIndexCanDeleteByKey(t, index, key)
+		rowIDs = rowIDs[:len(rowIDs)-1]
+		assertIndexItemsAreSame(t, index, rowIDs)
 	}
 }
 
@@ -178,7 +199,7 @@ func assertIndexItemsAreSame(t *testing.T, index core.Uint32Index, rowIDs []core
 	if i != len(rowIDs) {
 		t.Errorf("Did not iterate over all entries")
 	}
-	if !funcCalled {
+	if !funcCalled && len(rowIDs) > 0 {
 		t.Errorf("Function passed to core.Uint32Index was not called")
 	}
 }
