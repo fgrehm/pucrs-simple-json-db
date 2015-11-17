@@ -28,16 +28,16 @@ func TestControlBlock_NextAvailableRecordsDataBlock(t *testing.T) {
 	}
 }
 
-func TestControlBlock_BTreeRootBlock(t *testing.T) {
+func TestControlBlock_IndexRootBlockID(t *testing.T) {
 	block := &dbio.DataBlock{Data: []byte{0, 0, 0, 0, 0, 0x09}}
 	cb := &controlBlock{block}
 
-	if blockID := cb.BTreeRootBlock(); blockID != 9 {
+	if blockID := cb.IndexRootBlockID(); blockID != 9 {
 		t.Errorf("Root BTree datablock pointer was not read, got %d and expected %d", blockID, 9)
 	}
 
 	cb.SetBTreeRootBlock(901)
-	if id := cb.BTreeRootBlock(); id != 901 {
+	if id := cb.IndexRootBlockID(); id != 901 {
 		t.Errorf("Next id was not read, got %d and expected %d", id, 901)
 	}
 
