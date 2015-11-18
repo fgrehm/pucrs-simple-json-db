@@ -5,8 +5,8 @@ import (
 	"simplejsondb/dbio"
 )
 
-func Update(buffer dbio.DataBuffer, record *core.Record) error {
-	rowID, err := findRowID(buffer, record.ID)
+func Update(index core.Uint32Index, buffer dbio.DataBuffer, record *core.Record) error {
+	rowID, err := index.Find(record.ID)
 	if err != nil {
 		return err
 	}

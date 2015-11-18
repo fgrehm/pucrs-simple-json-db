@@ -9,7 +9,7 @@ import (
 )
 
 func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(30)
+	fakeDataFile := utils.NewFakeDataFile(80)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)
@@ -34,7 +34,7 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 }
 
 func TestCreateAndRemoveRecords(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(4)
+	fakeDataFile := utils.NewFakeDataFile(20)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)
@@ -60,7 +60,7 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 }
 
 func TestCreateAndUpdateRecords(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(14)
+	fakeDataFile := utils.NewFakeDataFile(20)
 	db, err := jsondb.NewWithDataFile(fakeDataFile)
 	if err != nil {
 		t.Fatalf("Unexpected error returned '%s'", err)

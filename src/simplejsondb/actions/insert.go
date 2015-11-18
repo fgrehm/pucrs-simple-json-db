@@ -5,16 +5,15 @@ import (
 	"simplejsondb/dbio"
 )
 
-func Insert(buffer dbio.DataBuffer, record *core.Record) error {
+func Insert(index core.Uint32Index, buffer dbio.DataBuffer, record *core.Record) error {
 	cb := core.NewDataBlockRepository(buffer).ControlBlock()
 	buffer.MarkAsDirty(cb.DataBlockID())
 
 	allocator := NewRecordAllocator(buffer)
-	if _, err := allocator.Add(record); err != nil {
+	rowID, err := allocator.Add(record)
+	if err != nil {
 		return err
 	}
 
-	// TODO: After inserting the record, need to update the BTree+ index
-
-	return nil
+	return index.Insert(record.ID, rowID)
 }

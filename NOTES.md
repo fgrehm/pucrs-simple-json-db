@@ -1,3 +1,8 @@
+# Known issues
+
+- [ ] Might run out of frames while reading records, might need to change strategy for traversing all elements on the tree
+      (maybe return an array instead of using an iterator)
+
 # TODO
 
 - [x] BitMap abstraction
@@ -14,14 +19,14 @@
 - [x] Chained rows
 - [x] Update records
 - [x] B+Tree index
-- [ ] Remove autoincrement logic
-- [ ] Integrate BTree with the rest of the code
-- [ ] Fix datablocks map
+- [x] Remove autoincrement logic
+- [x] Integrate BTree with the rest of the code
+- [ ] Shell with readline enabled
 - [ ] Buffer with Clock cache strategy (and revisit buffer needs required for testing)
 - [ ] Search by tag using a sequential read of the list of records present on a datablock derived from the BTree+ index
-- [ ] Shell with readline enabled
-- [ ] Buffer with "a more efficient lookup"
 - [ ] Documentation (including "class diagram")
+- [ ] Fix datablocks map
+- [ ] Buffer with "a more efficient lookup"
 
 # Nice to haves
 

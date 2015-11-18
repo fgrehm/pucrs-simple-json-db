@@ -128,7 +128,7 @@ func TestUint32Index_GrowAndShrinkLotsOfEntries(t *testing.T) {
 }
 
 func createIndex(t *testing.T, totalUsableBlocks, bufferFrames, branchCapacity int, leafCapacity int) core.Uint32Index {
-	fakeDataFile := utils.NewFakeDataFile(totalUsableBlocks+4)
+	fakeDataFile := utils.NewFakeDataFile(totalUsableBlocks + 4)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}

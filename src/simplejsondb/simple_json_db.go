@@ -6,7 +6,11 @@ import (
 	"simplejsondb/dbio"
 )
 
-const BUFFER_SIZE = 256
+const (
+	BUFFER_SIZE                  = 256
+	BTREE_IDX_BRANCH_MAX_ENTRIES = 680
+	BTREE_IDX_LEAF_MAX_ENTRIES   = 510
+)
 
 type SimpleJSONDB interface {
 	InsertRecord(id uint32, data string) error
@@ -18,8 +22,9 @@ type SimpleJSONDB interface {
 
 type simpleJSONDB struct {
 	dataFile dbio.DataFile
-	repo     core.DataBlockRepository
 	buffer   dbio.DataBuffer
+	repo     core.DataBlockRepository
+	index    core.Uint32Index
 }
 
 func New(datafilePath string) (SimpleJSONDB, error) {
@@ -37,7 +42,8 @@ func NewWithDataFile(dataFile dbio.DataFile) (SimpleJSONDB, error) {
 
 	dataBuffer := dbio.NewDataBuffer(dataFile, BUFFER_SIZE)
 	repo := core.NewDataBlockRepository(dataBuffer)
-	return &simpleJSONDB{dataFile, repo, dataBuffer}, nil
+	index := core.NewUint32Index(dataBuffer, BTREE_IDX_BRANCH_MAX_ENTRIES, BTREE_IDX_LEAF_MAX_ENTRIES)
+	return &simpleJSONDB{dataFile, dataBuffer, repo, index}, nil
 }
 
 func (db *simpleJSONDB) Close() error {
@@ -49,18 +55,18 @@ func (db *simpleJSONDB) Close() error {
 
 func (db *simpleJSONDB) InsertRecord(id uint32, data string) error {
 	record := &core.Record{ID: id, Data: data}
-	return actions.Insert(db.buffer, record)
+	return actions.Insert(db.index, db.buffer, record)
 }
 
 func (db *simpleJSONDB) UpdateRecord(id uint32, data string) error {
 	record := &core.Record{ID: id, Data: data}
-	return actions.Update(db.buffer, record)
+	return actions.Update(db.index, db.buffer, record)
 }
 
 func (db *simpleJSONDB) DeleteRecord(id uint32) error {
-	return actions.Delete(db.buffer, id)
+	return actions.Delete(db.index, db.buffer, id)
 }
 
 func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
-	return actions.Find(db.buffer, id)
+	return actions.Find(db.index, db.buffer, id)
 }

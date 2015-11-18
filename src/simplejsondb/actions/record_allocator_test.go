@@ -11,7 +11,7 @@ import (
 )
 
 func TestRecordAllocator_Add(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(5)
+	fakeDataFile := utils.NewFakeDataFile(7)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}
@@ -42,23 +42,23 @@ func TestRecordAllocator_Add(t *testing.T) {
 
 	// Ensure the blocks point to each other
 	firstRecordBlock := repo.RecordBlock(3)
-	if firstRecordBlock.NextBlockID() != 4 {
+	if firstRecordBlock.NextBlockID() != 5 {
 		t.Errorf("First allocated block does not point to the next one")
 	}
-	secondRecordBlock := repo.RecordBlock(4)
+	secondRecordBlock := repo.RecordBlock(5)
 	if secondRecordBlock.PrevBlockID() != 3 {
 		t.Errorf("Second allocated block does not point to the previous one")
 	}
 
 	// Ensure the pointer for the next datablock that has free space has been updated
 	controlBlock := repo.ControlBlock()
-	if controlBlock.NextAvailableRecordsDataBlockID() != 4 {
-		t.Errorf("Did not update the pointer to the next datablock that has allows insertion")
+	if controlBlock.NextAvailableRecordsDataBlockID() != 6 {
+		t.Errorf("Did not update the pointer to the next datablock that has allows insertion, got %d", controlBlock.NextAvailableRecordsDataBlockID())
 	}
 }
 
 func TestRecordAllocator_Remove(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(7)
+	fakeDataFile := utils.NewFakeDataFile(8)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
@@ -103,15 +103,15 @@ func TestRecordAllocator_Remove(t *testing.T) {
 	}
 
 	// Ensure the linked list is set up properly
-	// First records datablock is now at block 4
+	// First records datablock is now at block 5
 	controlBlock := repo.ControlBlock()
-	if controlBlock.FirstRecordDataBlock() != 4 {
+	if controlBlock.FirstRecordDataBlock() != 5 {
 		t.Fatal("First record datablock is set to the wrong block")
 	}
 
 	// Then the next block on the chain is at block 6
-	recordBlock := repo.RecordBlock(4)
-	if recordBlock.NextBlockID() != 6 {
+	recordBlock := repo.RecordBlock(5)
+	if recordBlock.NextBlockID() != 7 {
 		t.Fatal("First record datablock next block pointer is set to the wrong block")
 	}
 
@@ -123,7 +123,7 @@ func TestRecordAllocator_Remove(t *testing.T) {
 }
 
 func TestRecordAllocator_Update(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(5)
+	fakeDataFile := utils.NewFakeDataFile(6)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestRecordAllocator_Update(t *testing.T) {
 }
 
 func TestRecordAllocator_ChainedRows(t *testing.T) {
-	fakeDataFile := utils.NewFakeDataFile(9)
+	fakeDataFile := utils.NewFakeDataFile(11)
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 5)
 	if err := core.FormatDataFileIfNeeded(fakeDataFile); err != nil {
 		t.Fatal(err)

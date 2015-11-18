@@ -38,8 +38,8 @@ func (cb *controlBlock) Format() {
 	// Where the linked list starts
 	cb.block.Write(POS_FIRST_BLOCK_PTR, uint16(3))
 	// Where the BTree index starts
-	cb.block.Write(POS_BTREE_ROOT, uint16(4))
-	cb.block.Write(POS_BTREE_FIRST_LEAF, uint16(4))
+	cb.block.Write(POS_BTREE_ROOT, uint16(0))
+	cb.block.Write(POS_BTREE_FIRST_LEAF, uint16(0))
 }
 
 func (cb *controlBlock) FirstRecordDataBlock() uint16 {
