@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -22,7 +23,7 @@ Available commands:
 	[TODO] bulk-insert <first-id> <last-id> <json-string-template>
 	[TODO] update <id> <new-json-string>
 	find <id>
-	[TODO] delete <id>
+	delete <id>
 	[TODO] search <attribute> <value>
 	set-log-level <log-level>
 	[TODO] inspect-block <data-block-id>
@@ -83,6 +84,8 @@ func Run() {
 			insert(db, l, line[7:])
 		case strings.HasPrefix(line, "find "):
 			find(db, l, line[5:])
+		case strings.HasPrefix(line, "delete "):
+			deleteRecord(db, l, line[7:])
 		case line == "exit":
 			goto exit
 		case line == "help":
@@ -104,7 +107,7 @@ func setLogLevel(level string) {
 	case "warn":
 		log.SetLevel(log.WarnLevel)
 	default:
-		println("Invalid log level:", level)
+		fmt.Printf("Invalid log level: %#v", level)
 	}
 }
 
@@ -124,7 +127,7 @@ func insert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 }
 
 func find(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
-	id, err := strconv.ParseUint(args, 10, 32)
+	id, err := strconv.ParseUint(strings.Trim(args, " "), 10, 32)
 	if err != nil {
 		log.Error(err)
 		return
@@ -138,4 +141,17 @@ func find(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	json.Indent(&out, record.Data, "", "  ")
 	out.WriteString("\n")
 	out.WriteTo(os.Stdout)
+}
+
+func deleteRecord(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+	id, err := strconv.ParseUint(strings.Trim(args, " "), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	if err = db.DeleteRecord(uint32(id)); err != nil {
+		log.Error(err)
+		return
+	}
+	fmt.Printf("Record %d deleted\n", id)
 }
