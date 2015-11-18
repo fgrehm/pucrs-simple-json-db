@@ -8,6 +8,19 @@
 			"branch": "master"
 		},
 		{
+			"importpath": "github.com/chzyer/readline",
+			"repository": "https://github.com/chzyer/readline",
+			"revision": "9364259fb129ed16164189f89518fbbf6851fd4f",
+			"branch": "master"
+		},
+		{
+			"importpath": "golang.org/x/crypto/ssh/terminal",
+			"repository": "https://go.googlesource.com/crypto",
+			"revision": "346896d57731cb5670b36c6178fc5519f3225980",
+			"branch": "master",
+			"path": "/ssh/terminal"
+		},
+		{
 			"importpath": "gopkg.in/airbrake/gobrake.v2",
 			"repository": "https://gopkg.in/airbrake/gobrake.v2",
 			"revision": "e5efbe565a5a63d8aafee7efa2f4fdd7f42b7bd3",
