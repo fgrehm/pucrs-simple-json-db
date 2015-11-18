@@ -23,7 +23,7 @@ type RecordBlock interface {
 	SetNextBlockID(blockID uint16)
 	PrevBlockID() uint16
 	SetPrevBlockID(blockID uint16)
-	ReadRecordData(localID uint16) (string, error)
+	ReadRecordData(localID uint16) ([]byte, error)
 	Clear()
 
 	// HACK: Temporary, meant to be around while we don't have a btree in place
@@ -280,16 +280,16 @@ func (rb *recordBlock) SetChainedRowID(localID uint16, rowID RowID) error {
 	return nil
 }
 
-func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
+func (rb *recordBlock) ReadRecordData(localID uint16) ([]byte, error) {
 	totalHeaders := rb.block.ReadUint16(POS_TOTAL_HEADERS)
 	if localID >= totalHeaders {
-		return "", errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
+		return nil, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
 	}
 
 	headerPtr := int(POS_FIRST_HEADER) - int(localID)*int(RECORD_HEADER_SIZE)
 	id := rb.block.ReadUint32(headerPtr + HEADER_OFFSET_RECORD_ID)
 	if id == 0 {
-		return "", errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
+		return nil, errors.New(fmt.Sprintf("Invalid local ID provided to `RecordBlock.ReadRecordData` (%d)", localID))
 	}
 
 	start := rb.block.ReadUint16(headerPtr + HEADER_OFFSET_RECORD_START)
@@ -298,7 +298,7 @@ func (rb *recordBlock) ReadRecordData(localID uint16) (string, error) {
 
 	log.Infof("READ rowid='%d:%d', recordid=%d, startsAt=%d, size=%d", rb.block.ID, localID, id, start, recordSize)
 
-	return string(rb.block.Data[start:end]), nil
+	return rb.block.Data[start:end], nil
 }
 
 func (rb *recordBlock) FreeSpaceForInsert() uint16 {

@@ -1,8 +1,9 @@
 package core
 
 import (
-	log "github.com/Sirupsen/logrus"
+	"bytes"
 	"simplejsondb/dbio"
+	log "github.com/Sirupsen/logrus"
 )
 
 type RecordLoader interface {
@@ -22,7 +23,7 @@ func (rf *recordLoader) Load(id uint32, rowID RowID) (*Record, error) {
 	rb := repo.RecordBlock(rowID.DataBlockID)
 
 	log.Infof("FIND_RECORD recordID=%d, rowID='%d:%d'", id, rowID.DataBlockID, rowID.LocalID)
-	data, err := rb.ReadRecordData(rowID.LocalID)
+	dataSlice, err := rb.ReadRecordData(rowID.LocalID)
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +32,10 @@ func (rf *recordLoader) Load(id uint32, rowID RowID) (*Record, error) {
 		return nil, err
 	}
 
+	data := make([]byte, len(dataSlice))
+	copy(data, dataSlice)
+	buff := bytes.NewBuffer(data)
+
 	for chainedRowID.DataBlockID != 0 {
 		rb = repo.RecordBlock(chainedRowID.DataBlockID)
 		log.Infof("GET_CHAINED recordID=%d, chainerRowID='%d:%d'", id, chainedRowID.DataBlockID, chainedRowID.LocalID)
@@ -38,12 +43,12 @@ func (rf *recordLoader) Load(id uint32, rowID RowID) (*Record, error) {
 		if err != nil {
 			return nil, err
 		}
-		data += chainedData
+		buff.Write(chainedData)
 		chainedRowID, err = rb.ChainedRowID(chainedRowID.LocalID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &Record{ID: id, Data: data}, nil
+	return &Record{ID: id, Data: buff.Bytes()}, nil
 }

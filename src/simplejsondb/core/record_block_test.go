@@ -28,7 +28,7 @@ func TestRecordBlock_BasicAddReadAndDeleteFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if data != "01234567890123456789" {
+	if string(data) != "01234567890123456789" {
 		t.Errorf("Unexpected data found `%s`", data)
 	}
 
@@ -78,7 +78,7 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data != "00" {
+	if string(data) != "00" {
 		t.Errorf("Unexpected data found `%s`", data)
 	}
 	// Ensure things are persisted as they should
@@ -105,7 +105,7 @@ func TestRecordBlock_Allocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data != "00" {
+	if string(data) != "00" {
 		t.Errorf("Unexpected data found `%s`, expected `%s`", data, "00")
 	}
 
@@ -139,7 +139,7 @@ func TestRecordBlock_UpdateFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data != "" {
+	if string(data) != "" {
 		t.Errorf("Read data for a record that has been deleted `%s`", data)
 	}
 
@@ -151,7 +151,7 @@ func TestRecordBlock_UpdateFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data != "NNNNNNNNNN" {
+	if string(data) != "NNNNNNNNNN" {
 		t.Errorf("Unexpected data found `%s`", data)
 	}
 }

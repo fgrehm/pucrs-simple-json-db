@@ -2,7 +2,7 @@ package core
 
 type Record struct {
 	ID   uint32
-	Data string
+	Data []byte
 }
 
 type RowID struct {

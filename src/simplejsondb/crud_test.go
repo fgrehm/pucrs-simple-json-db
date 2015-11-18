@@ -27,8 +27,8 @@ func TestCreateAndRetrieveLotsOfRecords(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error returned while reading %d (%s)", id, err)
 		}
-		if record.Data != data {
-			t.Errorf("Unexpected data returned, got %s, expected %s", record.Data, data)
+		if string(record.Data) != data {
+			t.Errorf("Unexpected data returned, got %s, expected %s", string(record.Data), data)
 		}
 	}
 }
@@ -54,7 +54,7 @@ func TestCreateAndRemoveRecords(t *testing.T) {
 		}
 
 		if record, err := db.FindRecord(id); err == nil {
-			t.Errorf("Expected error to be returned when finding %d, got nil and data '%s'", id, record.Data)
+			t.Errorf("Expected error to be returned when finding %d, got nil and data '%s'", id, string(record.Data))
 		}
 	}
 }
@@ -92,8 +92,8 @@ func TestCreateAndUpdateRecords(t *testing.T) {
 			t.Errorf("Unexpected error returned while reading %d (%s)", id, err)
 			continue
 		}
-		if record.Data != data {
-			t.Errorf("Unexpected data returned, got `%s`, expected `%s`", record.Data, data)
+		if string(record.Data) != data {
+			t.Errorf("Unexpected data returned, got `%s`, expected `%s`", string(record.Data), data)
 			continue
 		}
 	}
@@ -114,8 +114,8 @@ func TestCreateAndUpdateRecords(t *testing.T) {
 			t.Errorf("Unexpected error returned while reading %d (%s)", id, err)
 			continue
 		}
-		if record.Data != data {
-			t.Errorf("Unexpected data returned, got `%s`, expected `%s`", record.Data, data)
+		if string(record.Data) != data {
+			t.Errorf("Unexpected data returned, got `%s`, expected `%s`", string(record.Data), data)
 			continue
 		}
 	}

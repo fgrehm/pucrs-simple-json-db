@@ -54,12 +54,12 @@ func (db *simpleJSONDB) Close() error {
 }
 
 func (db *simpleJSONDB) InsertRecord(id uint32, data string) error {
-	record := &core.Record{ID: id, Data: data}
+	record := &core.Record{ID: id, Data: []byte(data)}
 	return actions.Insert(db.index, db.buffer, record)
 }
 
 func (db *simpleJSONDB) UpdateRecord(id uint32, data string) error {
-	record := &core.Record{ID: id, Data: data}
+	record := &core.Record{ID: id, Data: []byte(data)}
 	return actions.Update(db.index, db.buffer, record)
 }
 
