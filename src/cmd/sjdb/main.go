@@ -1,27 +1,22 @@
 package main
 
 import (
-	"fmt"
-
-	// _ "github.com/icrowley/fake"
-
-	log "github.com/Sirupsen/logrus"
-
-	jsondb "simplejsondb"
+	"simplejsondb/cli"
 )
 
 func main() {
-	log.SetLevel(log.DebugLevel)
-
-	db, err := jsondb.New("metadata-db.dat")
-	if err != nil {
-		panic(err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	cli.Run()
+	// 	log.SetLevel(log.DebugLevel)
+	//
+	// 	db, err := jsondb.New("metadata-db.dat")
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	defer func() {
+	// 		if err := db.Close(); err != nil {
+	// 			panic(err)
+	// 		}
+	// 	}()
 
 	// now := time.Now().Format("2006-01-02T15:04:05MST")
 	// json := `{"name":"` + fake.FullName() + `","company":"` + fake.Company() + `","city":"` + fake.City() + `","created_at":"` + now + `"}`
@@ -38,23 +33,23 @@ func main() {
 	// log.Printf("Record: %+v", record)
 	// log.Printf("Error:  %+v", err)
 
-	for i := uint32(0); i < 100; i++ {
-		id := i + 1
-		data := fmt.Sprintf(`{"a":%d}`, i)
-		err := db.InsertRecord(id, data)
-		if err != nil {
-			log.Fatalf("Unexpected error returned '%s'", err)
-		}
-		log.Println("New record ID", id)
+	// for i := uint32(0); i < 100; i++ {
+	// 	id := i + 1
+	// 	data := fmt.Sprintf(`{"a":%d}`, i)
+	// 	err := db.InsertRecord(id, data)
+	// 	if err != nil {
+	// 		log.Fatalf("Unexpected error returned '%s'", err)
+	// 	}
+	// 	log.Println("New record ID", id)
 
-		record, err := db.FindRecord(id)
-		if err != nil {
-			log.Fatalf("Unexpected error returned '%s'", err)
-		}
-		if record.Data != data {
-			log.Fatalf("Unexpected data returned (%s)", record.Data)
-		}
-	}
+	// 	record, err := db.FindRecord(id)
+	// 	if err != nil {
+	// 		log.Fatalf("Unexpected error returned '%s'", err)
+	// 	}
+	// 	if record.Data != data {
+	// 		log.Fatalf("Unexpected data returned (%s)", record.Data)
+	// 	}
+	// }
 
 	// Test reading / writing blocks and bitmaps
 	//

@@ -4,10 +4,10 @@ DOCKER_DEV_CONTAINER_NAME := simple-json-db-dev
 all: build test
 
 .PHONY: build
-build: bin/simple-json-db
+build: bin/sjdb
 
-bin/simple-json-db: $(shell find -L src -type f -name '*.go')
-	gb build cmd/simple-json-db
+bin/sjdb: $(shell find -L src -type f -name '*.go')
+	gb build cmd/sjdb
 
 .PHONY: test
 test:
