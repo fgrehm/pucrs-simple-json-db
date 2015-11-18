@@ -48,26 +48,28 @@ func NewDataBuffer(df DataFile, size int) DataBuffer {
 func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 	frame, present := db.idToFrame[id]
 	if present {
-		log.Debugf("FETCH blockid=%d, cachehit=true", id)
+		log.Debugf("FETCH blockID=%d, cacheHit=true", id)
 
 		return &DataBlock{ID: id, Data: frame.data}, nil
 	} else {
-		log.Debugf("FETCH blockid=%d, cachehit=false", id)
+		log.Debugf("FETCH blockID=%d, cacheHit=false", id)
 
+		var frame *bufferFrame
+		var err error
 		if len(db.nextVictims) == db.size {
-			if err := db.evictOldestFrame(); err != nil {
+			if frame, err = db.evictFrame(); err != nil {
 				return nil, err
 			}
-		}
-
-		for i := 0; i < db.size; i++ {
-			frame = db.frames[i]
-			if !db.frames[i].inUse {
-				break
+		} else {
+			for i := 0; i < db.size; i++ {
+				frame = db.frames[i]
+				if !db.frames[i].inUse {
+					break
+				}
 			}
 		}
 
-		err := db.df.ReadBlock(id, frame.data)
+		err = db.df.ReadBlock(id, frame.data)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +83,7 @@ func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 }
 
 func (db *dataBuffer) MarkAsDirty(dataBlockID uint16) error {
-	log.Debugf("DIRTY blockid=%d", dataBlockID)
+	log.Debugf("DIRTY blockID=%d", dataBlockID)
 	frame := db.idToFrame[dataBlockID]
 	if frame == nil {
 		panic("Tried to mark as dirty a block that is no longer on the buffer")
@@ -105,14 +107,12 @@ func (db *dataBuffer) Sync() error {
 	return nil
 }
 
-func (db *dataBuffer) evictOldestFrame() error {
-	id := db.nextVictims[0]
-	frame := db.idToFrame[id]
-
-	log.Debugf("EVICT blockid=%d, dirty=%t", id, frame.isDirty)
+func (db *dataBuffer) evictFrame() (*bufferFrame, error) {
+	id, frame := db.pickFrameToEvict()
+	log.Debugf("EVICT blockID=%d, dirty=%t", id, frame.isDirty)
 	if frame.isDirty {
 		if err := db.df.WriteBlock(id, frame.data); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -121,5 +121,10 @@ func (db *dataBuffer) evictOldestFrame() error {
 	delete(db.idToFrame, id)
 	db.nextVictims = db.nextVictims[1:]
 
-	return nil
+	return frame, nil
+}
+
+func (db *dataBuffer) pickFrameToEvict() (uint16, *bufferFrame) {
+	id := db.nextVictims[0]
+	return id, db.idToFrame[id]
 }
