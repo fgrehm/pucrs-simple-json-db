@@ -19,9 +19,9 @@ func usage(w io.Writer) {
 	io.WriteString(w, `
 Available commands:
   [TODO] all <first-id> <count>
-  insert <id> <json-string>
+  insert <id> <json-string-template>
   bulk-insert <first-id> <last-id> <json-string-template>
-  [TODO] update <id> <new-json-string>
+  update <id> <new-json-string-template>
   find <id>
   delete <id>
   [TODO] search <attribute> <value>
@@ -87,6 +87,8 @@ func Run() {
 			bulkInsert(db, l, line[12:])
 		case strings.HasPrefix(line, "find "):
 			find(db, line[5:])
+		case strings.HasPrefix(line, "update "):
+			update(db, l, line[7:])
 		case strings.HasPrefix(line, "delete "):
 			deleteRecord(db, line[7:])
 		case strings.HasPrefix(strings.Trim(line, " "), "show-tree"):
@@ -131,6 +133,22 @@ func insert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	}
 }
 
+func update(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+	idAndJson := strings.SplitN(args, " ", 2)
+	if len(idAndJson) != 2 {
+		usage(l.Stderr())
+	}
+	id, err := strconv.ParseUint(idAndJson[0], 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	if err = db.UpdateRecord(uint32(id), idAndJson[1]); err != nil {
+		log.Error(err)
+	}
+	log.Warn("Record updated")
+}
+
 func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	argsArr := strings.SplitN(args, " ", 3)
 	if len(argsArr) != 3 {
@@ -147,6 +165,10 @@ func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 		log.Error(err)
 		return
 	}
+	if initialID > lastID {
+		log.Error("Invalid ID range provided")
+		return
+	}
 	jsonStringTemplate := argsArr[2]
 	for id := initialID; id <= lastID; id++ {
 		log.Warnf("Inserting %v", id)
@@ -155,6 +177,7 @@ func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 			break
 		}
 	}
+	log.Warnf("%d records inserted", lastID-initialID)
 }
 
 func find(db sjdb.SimpleJSONDB, args string) {
@@ -185,6 +208,7 @@ func deleteRecord(db sjdb.SimpleJSONDB, args string) {
 		return
 	}
 	fmt.Printf("Record %d deleted\n", id)
+	log.Warnf("Record %d deleted", id)
 }
 
 func showTree(db sjdb.SimpleJSONDB) {
