@@ -24,7 +24,7 @@ func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
 }
 
 func (ra *recordAllocator) Add(record *Record) (RowID, error) {
-	log.Printf("INSERT recordid=%d", record.ID)
+	log.Printf("INSERT recordID=%d", record.ID)
 
 	controlBlock := ra.repo.ControlBlock()
 	insertBlockID := controlBlock.NextAvailableRecordsDataBlockID()

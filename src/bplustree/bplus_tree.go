@@ -1,7 +1,7 @@
 package bplustree
 
 import (
-	"errors"
+	"fmt"
 	"sort"
 )
 
@@ -49,7 +49,7 @@ func (t *bPlusTree) Insert(key Key, item Item) error {
 
 	insertPosition, found := t.findOnNode(leaf, key)
 	if found {
-		return errors.New("Key already exists")
+		return fmt.Errorf("Key already exists: %+v", key)
 	}
 
 	t.insertOnLeaf(leaf, insertPosition, LeafEntry{key, item})
@@ -61,7 +61,7 @@ func (t *bPlusTree) Delete(key Key) error {
 	root := t.adapter.LoadRoot()
 
 	if root == nil {
-		return errors.New("Not found")
+		return fmt.Errorf("Key not found: %+v", key)
 	}
 
 	if leafRoot, isLeaf := root.(LeafNode); isLeaf {
@@ -72,7 +72,7 @@ func (t *bPlusTree) Delete(key Key) error {
 
 	deletePosition, found := t.findOnNode(leaf, key)
 	if !found {
-		return errors.New("Not found")
+		return fmt.Errorf("Key not found: %+v", key)
 	}
 
 	t.deleteFromLeaf(leaf, deletePosition)
@@ -319,7 +319,7 @@ func (t *bPlusTree) Find(key Key) (Item, error) {
 	root := t.adapter.LoadRoot()
 
 	if root == nil {
-		return nil, errors.New("Not found")
+		return nil, fmt.Errorf("Key not found: %+v", key)
 	}
 
 	if leafRoot, isLeaf := root.(LeafNode); isLeaf {
@@ -330,7 +330,7 @@ func (t *bPlusTree) Find(key Key) (Item, error) {
 
 	index, found := t.findOnNode(leaf, key)
 	if !found {
-		return nil, errors.New("Not found")
+		return nil, fmt.Errorf("Key not found: %+v", key)
 	}
 
 	return leaf.ItemAt(index), nil
