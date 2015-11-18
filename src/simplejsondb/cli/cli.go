@@ -80,7 +80,7 @@ func Run() {
 		}
 		switch {
 		case strings.HasPrefix(line, "set-log-level "):
-			setLogLevel(line[14:])
+			setLogLevel(strings.Trim(line[14:], " "))
 		case strings.HasPrefix(line, "insert "):
 			insert(db, l, line[7:])
 		case strings.HasPrefix(line, "bulk-insert "):
@@ -174,7 +174,7 @@ func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 		log.Warnf("Inserting %v", id)
 		if err = db.InsertRecord(uint32(id), jsonStringTemplate); err != nil {
 			log.Error(err)
-			break
+			return
 		}
 	}
 	log.Warnf("%d records inserted", lastID-initialID)
