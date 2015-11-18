@@ -84,7 +84,7 @@ func TestEvictsBlocksAfterFillingInAllFrames(t *testing.T) {
 func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	fakeDataBlock := []byte{0x00, 0x01, 0x02}
 	fakeDataFile := utils.NewFakeDataFileWithBlocks([][]byte{
-		fakeDataBlock, []byte{}, []byte{},
+		fakeDataBlock, []byte{}, []byte{}, []byte{},
 	})
 
 	blockThatWasWritten := uint16(999)
@@ -102,11 +102,14 @@ func TestSavesDirtyFramesWhenEvicting(t *testing.T) {
 	buffer.FetchBlock(1)
 	buffer.MarkAsDirty(0)
 
-	// Evict the first frame (by loading a third frame)
+	// Evict the frame 1 by loading a third frame
 	buffer.FetchBlock(2)
 
+	// Evict the frame 0 by loading a fourth frame
+	buffer.FetchBlock(3)
+
 	if blockThatWasWritten == 999 {
-		t.Fatal("Block was not saved to disk")
+		t.Fatalf("Block was not saved to disk (%d)", blockThatWasWritten)
 	}
 	if blockThatWasWritten != 0 {
 		t.Errorf("Unknown block saved to disk (%d)", blockThatWasWritten)

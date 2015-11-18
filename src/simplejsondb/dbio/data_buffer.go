@@ -19,10 +19,11 @@ type dataBuffer struct {
 }
 
 type bufferFrame struct {
-	inUse    bool
-	isDirty  bool
-	position int
-	data     []byte
+	inUse      bool
+	referenced bool
+	isDirty    bool
+	position   int
+	data       []byte
 }
 
 func NewDataBuffer(df DataFile, size int) DataBuffer {
@@ -47,39 +48,42 @@ func NewDataBuffer(df DataFile, size int) DataBuffer {
 
 func (db *dataBuffer) FetchBlock(id uint16) (*DataBlock, error) {
 	frame, present := db.idToFrame[id]
+
 	if present {
 		log.Debugf("FETCH blockID=%d, cacheHit=true", id)
-
+		frame.referenced = true
 		return &DataBlock{ID: id, Data: frame.data}, nil
-	} else {
-		log.Debugf("FETCH blockID=%d, cacheHit=false", id)
 
-		var frame *bufferFrame
-		var err error
-		if len(db.nextVictims) == db.size {
-			if frame, err = db.evictFrame(); err != nil {
-				return nil, err
-			}
-		} else {
-			for i := 0; i < db.size; i++ {
-				frame = db.frames[i]
-				if !db.frames[i].inUse {
-					break
-				}
-			}
-		}
+	}
 
-		err = db.df.ReadBlock(id, frame.data)
-		if err != nil {
+	log.Debugf("FETCH blockID=%d, cacheHit=false", id)
+
+	needsEvict := len(db.nextVictims) == db.size
+	var err error
+	if needsEvict {
+		if frame, err = db.evictFrame(); err != nil {
 			return nil, err
 		}
-
-		frame.inUse = true
-		db.nextVictims = append(db.nextVictims, id)
-		db.idToFrame[id] = frame
-
-		return &DataBlock{ID: id, Data: frame.data}, nil
+	} else {
+		for i := 0; i < db.size; i++ {
+			frame = db.frames[i]
+			if !db.frames[i].inUse {
+				break
+			}
+		}
 	}
+
+	err = db.df.ReadBlock(id, frame.data)
+	if err != nil {
+		return nil, err
+	}
+
+	frame.inUse = true
+	frame.referenced = needsEvict
+	db.nextVictims = append(db.nextVictims, id)
+	db.idToFrame[id] = frame
+
+	return &DataBlock{ID: id, Data: frame.data}, nil
 }
 
 func (db *dataBuffer) MarkAsDirty(dataBlockID uint16) error {
@@ -89,6 +93,7 @@ func (db *dataBuffer) MarkAsDirty(dataBlockID uint16) error {
 		panic("Tried to mark as dirty a block that is no longer on the buffer")
 	}
 	frame.isDirty = true
+	frame.referenced = true
 	return nil
 }
 
@@ -108,23 +113,34 @@ func (db *dataBuffer) Sync() error {
 }
 
 func (db *dataBuffer) evictFrame() (*bufferFrame, error) {
-	id, frame := db.pickFrameToEvict()
-	log.Debugf("EVICT blockID=%d, dirty=%t", id, frame.isDirty)
-	if frame.isDirty {
-		if err := db.df.WriteBlock(id, frame.data); err != nil {
+	var victimFrame *bufferFrame
+	var victimID uint16
+
+	victimPosition := 0
+	for {
+		victimID = db.nextVictims[victimPosition]
+		victimFrame = db.idToFrame[victimID]
+
+		if !victimFrame.referenced {
+			break
+		}
+
+		log.Debugf("MARK_UNREFERENCED blockID=%d, dirty=%t", victimID, victimFrame.isDirty)
+		victimFrame.referenced = false
+		victimPosition = (victimPosition + 1) % db.size
+	}
+
+	log.Debugf("EVICT blockID=%d, dirty=%t", victimID, victimFrame.isDirty)
+	if victimFrame.isDirty {
+		if err := db.df.WriteBlock(victimID, victimFrame.data); err != nil {
 			return nil, err
 		}
 	}
 
-	frame.inUse = false
-	frame.isDirty = false
-	delete(db.idToFrame, id)
-	db.nextVictims = db.nextVictims[1:]
+	victimFrame.inUse = false
+	victimFrame.isDirty = false
+	delete(db.idToFrame, victimID)
+	db.nextVictims = append(db.nextVictims[victimPosition+1:], db.nextVictims[0:victimPosition]...)
 
-	return frame, nil
-}
-
-func (db *dataBuffer) pickFrameToEvict() (uint16, *bufferFrame) {
-	id := db.nextVictims[0]
-	return id, db.idToFrame[id]
+	return victimFrame, nil
 }
