@@ -21,11 +21,10 @@ func FormatDataFileIfNeeded(dataFile dbio.DataFile) error {
 	dataBuffer.MarkAsDirty(controlBlock.DataBlockID())
 
 	blockMap := repo.DataBlocksMap()
-	// 4 -> 1 for the control block
+	// 3 -> 1 for the control block
 	//      + 2 for the datablocks bitmap
 	//      + 1 for the first block used by records
-	//      + 1 for the first block used by the btree
-	for i := uint16(0); i < 5; i++ {
+	for i := uint16(0); i < 4; i++ {
 		blockMap.MarkAsUsed(i)
 	}
 

@@ -42,18 +42,18 @@ func TestRecordAllocator_Add(t *testing.T) {
 
 	// Ensure the blocks point to each other
 	firstRecordBlock := repo.RecordBlock(3)
-	if firstRecordBlock.NextBlockID() != 5 {
+	if firstRecordBlock.NextBlockID() != 4 {
 		t.Errorf("First allocated block does not point to the next one")
 	}
-	secondRecordBlock := repo.RecordBlock(5)
+	secondRecordBlock := repo.RecordBlock(4)
 	if secondRecordBlock.PrevBlockID() != 3 {
 		t.Errorf("Second allocated block does not point to the previous one")
 	}
 
 	// Ensure the pointer for the next datablock that has free space has been updated
 	controlBlock := repo.ControlBlock()
-	if controlBlock.NextAvailableRecordsDataBlockID() != 6 {
-		t.Errorf("Did not update the pointer to the next datablock that has allows insertion, got %d", controlBlock.NextAvailableRecordsDataBlockID())
+	if controlBlock.NextAvailableRecordsDataBlockID() != 4 {
+		t.Errorf("Did not update the pointer to the next datablock that allows insertion, got %d", controlBlock.NextAvailableRecordsDataBlockID())
 	}
 }
 
@@ -103,22 +103,22 @@ func TestRecordAllocator_Remove(t *testing.T) {
 	}
 
 	// Ensure the linked list is set up properly
-	// First records datablock is now at block 5
+	// First records datablock is now at block 4
 	controlBlock := repo.ControlBlock()
-	if controlBlock.FirstRecordDataBlock() != 5 {
-		t.Fatal("First record datablock is set to the wrong block")
+	if controlBlock.FirstRecordDataBlock() != 4 {
+		t.Fatalf("First record datablock is set to the wrong block, found %d", controlBlock.FirstRecordDataBlock())
 	}
 
 	// Then the next block on the chain is at block 6
-	recordBlock := repo.RecordBlock(5)
-	if recordBlock.NextBlockID() != 7 {
-		t.Fatal("First record datablock next block pointer is set to the wrong block")
+	recordBlock := repo.RecordBlock(4)
+	if recordBlock.NextBlockID() != 6 {
+		t.Fatalf("First record datablock next block pointer is set to the wrong block (%d)", recordBlock.NextBlockID())
 	}
 
 	// And the block 6 points back to the block 4
 	recordBlock = repo.RecordBlock(6)
 	if recordBlock.PrevBlockID() != 4 {
-		t.Fatal("Second record datablock previous block pointer is incorrect")
+		t.Fatalf("Second record datablock previous block pointer is incorrect (%d)", recordBlock.PrevBlockID())
 	}
 }
 
