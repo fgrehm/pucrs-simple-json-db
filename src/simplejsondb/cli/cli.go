@@ -1,7 +1,8 @@
 package cli
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"strconv"
@@ -133,5 +134,8 @@ func find(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 		log.Error(err)
 		return
 	}
-	fmt.Println(string(record.Data))
+	var out bytes.Buffer
+	json.Indent(&out, record.Data, "", "  ")
+	out.WriteString("\n")
+	out.WriteTo(os.Stdout)
 }

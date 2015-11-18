@@ -2,8 +2,8 @@ package core
 
 import (
 	"bytes"
-	"simplejsondb/dbio"
 	log "github.com/Sirupsen/logrus"
+	"simplejsondb/dbio"
 )
 
 type RecordLoader interface {

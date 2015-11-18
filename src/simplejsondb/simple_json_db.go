@@ -1,6 +1,9 @@
 package simplejsondb
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"simplejsondb/actions"
 	"simplejsondb/core"
 	"simplejsondb/dbio"
@@ -54,12 +57,20 @@ func (db *simpleJSONDB) Close() error {
 }
 
 func (db *simpleJSONDB) InsertRecord(id uint32, data string) error {
-	record := &core.Record{ID: id, Data: []byte(data)}
+	var jsonBuffer bytes.Buffer
+	if err := json.Compact(&jsonBuffer, []byte(data)); err != nil {
+		return err
+	}
+	record := &core.Record{ID: id, Data: jsonBuffer.Bytes()}
 	return actions.Insert(db.index, db.buffer, record)
 }
 
 func (db *simpleJSONDB) UpdateRecord(id uint32, data string) error {
-	record := &core.Record{ID: id, Data: []byte(data)}
+	var jsonBuffer bytes.Buffer
+	if err := json.Compact(&jsonBuffer, []byte(data)); err != nil {
+		return err
+	}
+	record := &core.Record{ID: id, Data: jsonBuffer.Bytes()}
 	return actions.Update(db.index, db.buffer, record)
 }
 
