@@ -18,17 +18,17 @@ import (
 func usage(w io.Writer) {
 	io.WriteString(w, `
 Available commands:
-	[TODO] all <first-id> <count>
-	insert <id> <json-string>
-	[TODO] bulk-insert <first-id> <last-id> <json-string-template>
-	[TODO] update <id> <new-json-string>
-	find <id>
-	delete <id>
-	[TODO] search <attribute> <value>
-	set-log-level <log-level>
-	[TODO] inspect-block <data-block-id>
-	show-tree
-	exit
+  [TODO] all <first-id> <count>
+  insert <id> <json-string>
+  bulk-insert <first-id> <last-id> <json-string-template>
+  [TODO] update <id> <new-json-string>
+  find <id>
+  delete <id>
+  [TODO] search <attribute> <value>
+  set-log-level <log-level>
+  [TODO] inspect-block <data-block-id>
+  show-tree
+  exit
 `[1:])
 }
 
@@ -83,6 +83,8 @@ func Run() {
 			setLogLevel(line[14:])
 		case strings.HasPrefix(line, "insert "):
 			insert(db, l, line[7:])
+		case strings.HasPrefix(line, "bulk-insert "):
+			bulkInsert(db, l, line[12:])
 		case strings.HasPrefix(line, "find "):
 			find(db, line[5:])
 		case strings.HasPrefix(line, "delete "):
@@ -126,6 +128,32 @@ func insert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	}
 	if err = db.InsertRecord(uint32(id), idAndJson[1]); err != nil {
 		log.Error(err)
+	}
+}
+
+func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+	argsArr := strings.SplitN(args, " ", 3)
+	if len(argsArr) != 3 {
+		usage(l.Stderr())
+		return
+	}
+	initialID, err := strconv.ParseUint(strings.Trim(argsArr[0], " "), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	lastID, err := strconv.ParseUint(strings.Trim(argsArr[1], " "), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	jsonStringTemplate := argsArr[2]
+	for id := initialID; id <= lastID; id++ {
+		log.Warnf("Inserting %v", id)
+		if err = db.InsertRecord(uint32(id), jsonStringTemplate); err != nil {
+			log.Error(err)
+			break
+		}
 	}
 }
 
