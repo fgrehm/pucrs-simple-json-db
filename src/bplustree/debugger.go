@@ -11,6 +11,10 @@ func DumpTree(tree BPlusTree, adapter NodeAdapter) string {
 }
 
 func dumpNode(tree BPlusTree, adapter NodeAdapter, indent string, node Node) string {
+	if node == nil {
+		return "EMPTY"
+	}
+
 	if leafRoot, isLeaf := node.(LeafNode); isLeaf {
 		return dumpLeaf(tree, adapter, indent, leafRoot)
 	} else {
