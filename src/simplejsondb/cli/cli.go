@@ -27,7 +27,7 @@ Available commands:
 	[TODO] search <attribute> <value>
 	set-log-level <log-level>
 	[TODO] inspect-block <data-block-id>
-	[TODO] show-tree
+	show-tree
 	exit
 `[1:])
 }
@@ -45,6 +45,7 @@ var completer = readline.NewPrefixCompleter(
 		readline.PcItem("info"),
 		readline.PcItem("warn"),
 	),
+	readline.PcItem("show-tree"),
 	readline.PcItem("exit"),
 )
 
@@ -83,9 +84,11 @@ func Run() {
 		case strings.HasPrefix(line, "insert "):
 			insert(db, l, line[7:])
 		case strings.HasPrefix(line, "find "):
-			find(db, l, line[5:])
+			find(db, line[5:])
 		case strings.HasPrefix(line, "delete "):
-			deleteRecord(db, l, line[7:])
+			deleteRecord(db, line[7:])
+		case strings.HasPrefix(strings.Trim(line, " "), "show-tree"):
+			showTree(db)
 		case line == "exit":
 			goto exit
 		case line == "help":
@@ -126,7 +129,7 @@ func insert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	}
 }
 
-func find(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+func find(db sjdb.SimpleJSONDB, args string) {
 	id, err := strconv.ParseUint(strings.Trim(args, " "), 10, 32)
 	if err != nil {
 		log.Error(err)
@@ -143,7 +146,7 @@ func find(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 	out.WriteTo(os.Stdout)
 }
 
-func deleteRecord(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+func deleteRecord(db sjdb.SimpleJSONDB, args string) {
 	id, err := strconv.ParseUint(strings.Trim(args, " "), 10, 32)
 	if err != nil {
 		log.Error(err)
@@ -154,4 +157,8 @@ func deleteRecord(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 		return
 	}
 	fmt.Printf("Record %d deleted\n", id)
+}
+
+func showTree(db sjdb.SimpleJSONDB) {
+	println(db.DumpIndex())
 }

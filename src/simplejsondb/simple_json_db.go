@@ -20,6 +20,7 @@ type SimpleJSONDB interface {
 	DeleteRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
 	UpdateRecord(id uint32, data string) error
+	DumpIndex() string
 	Close() error
 }
 
@@ -80,4 +81,8 @@ func (db *simpleJSONDB) DeleteRecord(id uint32) error {
 
 func (db *simpleJSONDB) FindRecord(id uint32) (*core.Record, error) {
 	return actions.Find(db.index, db.buffer, id)
+}
+
+func (db *simpleJSONDB) DumpIndex() string {
+	return db.index.Dump()
 }

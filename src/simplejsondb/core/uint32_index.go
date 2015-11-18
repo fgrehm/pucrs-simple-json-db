@@ -25,7 +25,7 @@ type Uint32Index interface {
 	All(iterator RowIDsIterator) error
 	Delete(key uint32) error
 	Init()
-	Dump()
+	Dump() string
 }
 
 func NewUint32Index(buffer dbio.DataBuffer, branchCapacity, leafCapacity int) Uint32Index {
@@ -71,6 +71,6 @@ func (i *index) Insert(key uint32, rowID RowID) error {
 	return i.tree.Insert(Uint32Key(key), rowID)
 }
 
-func (i *index) Dump() {
-	bplustree.DebugTree(i.tree, i.adapter)
+func (i *index) Dump() string {
+	return bplustree.DumpTree(i.tree, i.adapter)
 }
