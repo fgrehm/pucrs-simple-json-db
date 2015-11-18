@@ -9,7 +9,7 @@ func Insert(index core.Uint32Index, buffer dbio.DataBuffer, record *core.Record)
 	cb := core.NewDataBlockRepository(buffer).ControlBlock()
 	buffer.MarkAsDirty(cb.DataBlockID())
 
-	allocator := NewRecordAllocator(buffer)
+	allocator := core.NewRecordAllocator(buffer)
 	rowID, err := allocator.Add(record)
 	if err != nil {
 		return err

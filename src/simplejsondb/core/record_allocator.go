@@ -1,30 +1,29 @@
-package actions
+package core
 
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 
-	"simplejsondb/core"
 	"simplejsondb/dbio"
 )
 
 type RecordAllocator interface {
-	Add(record *core.Record) (core.RowID, error)
-	Update(rowID core.RowID, record *core.Record) error
-	Remove(rowID core.RowID) error
+	Add(record *Record) (RowID, error)
+	Update(rowID RowID, record *Record) error
+	Remove(rowID RowID) error
 }
 
 type recordAllocator struct {
 	buffer dbio.DataBuffer
-	repo   core.DataBlockRepository
+	repo   DataBlockRepository
 }
 
 func NewRecordAllocator(buffer dbio.DataBuffer) RecordAllocator {
-	repo := core.NewDataBlockRepository(buffer)
+	repo := NewDataBlockRepository(buffer)
 	return &recordAllocator{buffer, repo}
 }
 
-func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
+func (ra *recordAllocator) Add(record *Record) (RowID, error) {
 	log.Printf("INSERT recordid=%d", record.ID)
 
 	controlBlock := ra.repo.ControlBlock()
@@ -42,7 +41,7 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 		if freeSpaceForInsert > 0 {
 			localID, err = ra.allocateRecord(int(freeSpaceForInsert), recordBlock, record.ID, []byte(record.Data))
 			if err != nil {
-				return core.RowID{}, err
+				return RowID{}, err
 			}
 			break
 		}
@@ -55,7 +54,7 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 
 		newBlockID, err := ra.allocateNewBlock(insertBlockID)
 		if err != nil {
-			return core.RowID{}, err
+			return RowID{}, err
 		}
 		recordBlock.SetNextBlockID(newBlockID)
 		ra.buffer.MarkAsDirty(insertBlockID)
@@ -64,13 +63,13 @@ func (ra *recordAllocator) Add(record *core.Record) (core.RowID, error) {
 	}
 
 	ra.buffer.MarkAsDirty(insertBlockID)
-	return core.RowID{
+	return RowID{
 		DataBlockID: insertBlockID,
 		LocalID:     localID,
 	}, nil
 }
 
-func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock core.RecordBlock, recordID uint32, data []byte) (uint16, error) {
+func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock RecordBlock, recordID uint32, data []byte) (uint16, error) {
 	bytesToWrite := len(data)
 
 	// Does the record fit on the datablock?
@@ -112,7 +111,7 @@ func (ra *recordAllocator) allocateRecord(freeSpaceForInsert int, initialBlock c
 		}
 		nextLocalID := recordBlock.Add(recordID, data[0:bytesToWrite])
 		ra.buffer.MarkAsDirty(recordBlock.DataBlockID())
-		nextRowID := core.RowID{DataBlockID: recordBlock.DataBlockID(), LocalID: nextLocalID}
+		nextRowID := RowID{DataBlockID: recordBlock.DataBlockID(), LocalID: nextLocalID}
 
 		// And wire up the chain
 		prevBlock.SetChainedRowID(prevLocalID, nextRowID)
@@ -149,7 +148,7 @@ func (ra *recordAllocator) allocateNewBlock(startingBlockID uint16) (uint16, err
 	return newBlockID, nil
 }
 
-func (ra *recordAllocator) Remove(rowID core.RowID) error {
+func (ra *recordAllocator) Remove(rowID RowID) error {
 	firstBlock := ra.repo.RecordBlock(rowID.DataBlockID)
 
 	chainedRowID, err := firstBlock.ChainedRowID(rowID.LocalID)
@@ -179,7 +178,7 @@ func (ra *recordAllocator) Remove(rowID core.RowID) error {
 	return nil
 }
 
-func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
+func (ra *recordAllocator) removeFromList(emptyBlock RecordBlock) error {
 	prevBlockID := emptyBlock.PrevBlockID()
 	nextBlockID := emptyBlock.NextBlockID()
 
@@ -195,7 +194,7 @@ func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
 		if err != nil {
 			return err
 		}
-		controlBlock := core.NewDataBlockRepository(ra.buffer).ControlBlock()
+		controlBlock := NewDataBlockRepository(ra.buffer).ControlBlock()
 		controlBlock.SetFirstRecordDataBlock(nextBlockID)
 		ra.buffer.MarkAsDirty(controlDataBlock.ID)
 	}
@@ -225,7 +224,7 @@ func (ra *recordAllocator) removeFromList(emptyBlock core.RecordBlock) error {
 	return nil
 }
 
-func (ra *recordAllocator) Update(rowID core.RowID, record *core.Record) error {
+func (ra *recordAllocator) Update(rowID RowID, record *Record) error {
 	log.Infof("UPDATE rowID='%d:%d'", rowID.DataBlockID, rowID.LocalID)
 
 	rb := ra.repo.RecordBlock(rowID.DataBlockID)

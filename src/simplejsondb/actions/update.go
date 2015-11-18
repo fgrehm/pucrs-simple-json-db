@@ -11,7 +11,7 @@ func Update(index core.Uint32Index, buffer dbio.DataBuffer, record *core.Record)
 		return err
 	}
 
-	allocator := NewRecordAllocator(buffer)
+	allocator := core.NewRecordAllocator(buffer)
 	if err = allocator.Update(rowID, record); err != nil {
 		return err
 	}

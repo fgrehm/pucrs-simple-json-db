@@ -11,7 +11,7 @@ func Delete(index core.Uint32Index, buffer dbio.DataBuffer, id uint32) error {
 		return err
 	}
 
-	allocator := NewRecordAllocator(buffer)
+	allocator := core.NewRecordAllocator(buffer)
 	if err := allocator.Remove(rowID); err != nil {
 		return err
 	}

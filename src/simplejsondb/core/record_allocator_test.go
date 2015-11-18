@@ -1,7 +1,6 @@
-package actions_test
+package core_test
 
 import (
-	"simplejsondb/actions"
 	"simplejsondb/core"
 	"simplejsondb/dbio"
 
@@ -16,7 +15,7 @@ func TestRecordAllocator_Add(t *testing.T) {
 		t.Fatal(err)
 	}
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 4)
-	allocator := actions.NewRecordAllocator(dataBuffer)
+	allocator := core.NewRecordAllocator(dataBuffer)
 
 	// Fill up a datablock up to its limit
 	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
@@ -64,7 +63,7 @@ func TestRecordAllocator_Remove(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	allocator := actions.NewRecordAllocator(dataBuffer)
+	allocator := core.NewRecordAllocator(dataBuffer)
 
 	// Prepare data to fill up a datablock up to its limit
 	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
@@ -129,7 +128,7 @@ func TestRecordAllocator_Update(t *testing.T) {
 	}
 
 	dataBuffer := dbio.NewDataBuffer(fakeDataFile, 4)
-	allocator := actions.NewRecordAllocator(dataBuffer)
+	allocator := core.NewRecordAllocator(dataBuffer)
 
 	// Fill up a datablock up to its limit
 	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
@@ -184,7 +183,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	allocator := actions.NewRecordAllocator(dataBuffer)
+	allocator := core.NewRecordAllocator(dataBuffer)
 
 	// Prepare data to fill up a datablock close to its limit
 	maxData := dbio.DATABLOCK_SIZE - core.MIN_UTILIZATION - core.RECORD_HEADER_SIZE
@@ -213,7 +212,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 10)
 	repo := core.NewDataBlockRepository(dataBuffer)
-	allocator = actions.NewRecordAllocator(dataBuffer)
+	allocator = core.NewRecordAllocator(dataBuffer)
 
 	// Ensure the records can be read after a reload
 	recordBlock := repo.RecordBlock(chainedRowRowID.DataBlockID)
@@ -244,7 +243,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	dataBuffer.Sync()
 	dataBuffer = dbio.NewDataBuffer(fakeDataFile, 10)
 	repo = core.NewDataBlockRepository(dataBuffer)
-	allocator = actions.NewRecordAllocator(dataBuffer)
+	allocator = core.NewRecordAllocator(dataBuffer)
 
 	// Add and update a chained row that spans 3 blocks
 	bigContents := contents + contents + contents
