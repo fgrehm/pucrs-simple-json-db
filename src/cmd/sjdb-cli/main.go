@@ -1,4 +1,4 @@
-package cli
+package main
 
 import (
 	"bytes"
@@ -18,17 +18,17 @@ import (
 func usage(w io.Writer) {
 	io.WriteString(w, `
 Available commands:
-  [TODO] all <first-id> <count>
-  insert <id> <json-string-template>
-  bulk-insert <first-id> <last-id> <json-string-template>
-  update <id> <new-json-string-template>
-  find <id>
-  delete <id>
-  [TODO] search <attribute> <value>
-  set-log-level <log-level>
-  [TODO] inspect-block <data-block-id>
-  show-tree
-  exit
+	[TODO] all <first-id> <count>
+	insert <id> <json-string-template>
+	bulk-insert <first-id> <last-id> <json-string-template>
+	update <id> <new-json-string-template>
+	find <id>
+	delete <id>
+	[TODO] search <attribute> <value>
+	set-log-level <log-level>
+	[TODO] inspect-block <data-block-id>
+	show-tree
+	exit
 `[1:])
 }
 
@@ -49,7 +49,7 @@ var completer = readline.NewPrefixCompleter(
 	readline.PcItem("exit"),
 )
 
-func Run() {
+func main() {
 	log.SetLevel(log.WarnLevel)
 	log.SetOutput(os.Stderr)
 
@@ -177,7 +177,7 @@ func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 			return
 		}
 	}
-	log.Warnf("%d records inserted", lastID-initialID)
+	log.Warnf("%d records inserted", lastID-initialID+1)
 }
 
 func find(db sjdb.SimpleJSONDB, args string) {
