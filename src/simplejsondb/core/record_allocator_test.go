@@ -23,10 +23,10 @@ func TestRecordAllocator_Add(t *testing.T) {
 	for i := uint16(0); i < maxData; i++ {
 		contents += fmt.Sprintf("%d", i%10)
 	}
-	allocator.Add(&core.Record{uint32(1), []byte(contents)})
+	allocator.Add(&core.Record{ID: uint32(1), Data: []byte(contents)})
 
 	// Add a new record that will go into the next datablock on the list
-	allocator.Add(&core.Record{uint32(2), []byte("Some data")})
+	allocator.Add(&core.Record{ID: uint32(2), Data: []byte("Some data")})
 
 	// Flush data to data blocks and ensure that things work after a reload
 	dataBuffer.Sync()
@@ -73,11 +73,11 @@ func TestRecordAllocator_Remove(t *testing.T) {
 	}
 
 	// Insert data into 3 different blocks
-	allocator.Add(&core.Record{uint32(3), []byte(contents)})
-	allocator.Add(&core.Record{uint32(4), []byte(contents)})
-	allocator.Add(&core.Record{uint32(5), []byte(contents)})
-	allocator.Add(&core.Record{uint32(6), []byte("Some data")})
-	allocator.Add(&core.Record{uint32(7), []byte("More data")})
+	allocator.Add(&core.Record{ID: uint32(3), Data: []byte(contents)})
+	allocator.Add(&core.Record{ID: uint32(4), Data: []byte(contents)})
+	allocator.Add(&core.Record{ID: uint32(5), Data: []byte(contents)})
+	allocator.Add(&core.Record{ID: uint32(6), Data: []byte("Some data")})
+	allocator.Add(&core.Record{ID: uint32(7), Data: []byte("More data")})
 
 	// Free up some datablocks
 	allocator.Remove(core.RowID{DataBlockID: 3, LocalID: 0})
@@ -136,10 +136,10 @@ func TestRecordAllocator_Update(t *testing.T) {
 	for i := uint16(0); i < maxData; i++ {
 		contents += fmt.Sprintf("%d", i%10)
 	}
-	allocator.Add(&core.Record{1, []byte(contents)})
+	allocator.Add(&core.Record{ID: 1, Data: []byte(contents)})
 
 	// Add a new record that will go into the next datablock on the list
-	allocator.Add(&core.Record{2, []byte("Some data")})
+	allocator.Add(&core.Record{ID: 2, Data: []byte("Some data")})
 
 	// Update records
 	rowID := core.RowID{DataBlockID: 3, LocalID: 0}
@@ -193,11 +193,11 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 	}
 
 	// Insert data into 3 different blocks
-	dummy, _ := allocator.Add(&core.Record{uint32(3), []byte(contents[0 : maxData-100])})
-	chainedRowRowID, _ := allocator.Add(&core.Record{uint32(4), []byte(contents)})
-	removedChainedRowID, _ := allocator.Add(&core.Record{uint32(5), []byte(contents)})
-	allocator.Add(&core.Record{uint32(6), []byte("Some data")})
-	allocator.Add(&core.Record{uint32(7), []byte("More data")})
+	dummy, _ := allocator.Add(&core.Record{ID: uint32(3), Data: []byte(contents[0 : maxData-100])})
+	chainedRowRowID, _ := allocator.Add(&core.Record{ID: uint32(4), Data: []byte(contents)})
+	removedChainedRowID, _ := allocator.Add(&core.Record{ID: uint32(5), Data: []byte(contents)})
+	allocator.Add(&core.Record{ID: uint32(6), Data: []byte("Some data")})
+	allocator.Add(&core.Record{ID: uint32(7), Data: []byte("More data")})
 
 	// Ensure that the blocks are chained
 	if dummy.DataBlockID != chainedRowRowID.DataBlockID {
@@ -247,7 +247,7 @@ func TestRecordAllocator_ChainedRows(t *testing.T) {
 
 	// Add and update a chained row that spans 3 blocks
 	bigContents := contents + contents + contents
-	chainedUpdateRowID, _ := allocator.Add(&core.Record{uint32(9), []byte(bigContents)})
+	chainedUpdateRowID, _ := allocator.Add(&core.Record{ID: uint32(9), Data: []byte(bigContents)})
 
 	// Keep track of the list of the following row ids of the chained row
 	rowIDs := []core.RowID{}

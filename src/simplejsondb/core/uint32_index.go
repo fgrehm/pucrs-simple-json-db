@@ -5,7 +5,7 @@ import (
 	"simplejsondb/dbio"
 )
 
-type RowIDsIterator func(RowID)
+type RowIDsIterator func(uint32, RowID)
 
 type Uint32Key uint32
 
@@ -50,7 +50,7 @@ func (i *index) Init() {
 
 func (i *index) All(iterator RowIDsIterator) error {
 	return i.tree.All(func(entry bplustree.LeafEntry) {
-		iterator(entry.Item.(RowID))
+		iterator(uint32(entry.Key.(Uint32Key)), entry.Item.(RowID))
 	})
 }
 

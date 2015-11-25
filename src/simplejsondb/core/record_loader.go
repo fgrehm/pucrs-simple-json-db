@@ -22,7 +22,7 @@ func (rf *recordLoader) Load(id uint32, rowID RowID) (*Record, error) {
 	repo := NewDataBlockRepository(rf.buffer)
 	rb := repo.RecordBlock(rowID.DataBlockID)
 
-	log.Infof("FIND_RECORD recordID=%d, rowID='%d:%d'", id, rowID.DataBlockID, rowID.LocalID)
+	log.Infof("LOAD_RECORD recordID=%d, rowID='%d:%d'", id, rowID.DataBlockID, rowID.LocalID)
 	dataSlice, err := rb.ReadRecordData(rowID.LocalID)
 	if err != nil {
 		return nil, err

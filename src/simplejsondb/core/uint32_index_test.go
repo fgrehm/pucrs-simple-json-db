@@ -17,7 +17,7 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 	leafCapacity := 4
 	index := createIndex(t, 30, 20, branchCapacity, leafCapacity)
 
-	err := index.All(func(rowID core.RowID) {
+	err := index.All(func(_ uint32, rowID core.RowID) {
 		t.Fatalf("Index should be blank but found the following rowid: %+v", rowID)
 	})
 	if err != nil {
@@ -46,7 +46,7 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 	// Can we retrieve the rowids from the tree?
 	indexAllWasCalled := false
 	position := 0
-	index.All(func(rowID core.RowID) {
+	index.All(func(_ uint32, rowID core.RowID) {
 		indexAllWasCalled = true
 		if rowID != rowIDsInOrder[position] {
 			t.Errorf("Found an invalid RowID at %d, got %+v, expected %+v", position, rowID, rowIDsInOrder[position])
@@ -62,7 +62,7 @@ func TestUint32Index_BasicOperations(t *testing.T) {
 		key := i + 1
 		assertIndexCanDeleteByKey(t, index, key)
 	}
-	index.All(func(rowID core.RowID) {
+	index.All(func(_ uint32, rowID core.RowID) {
 		t.Fatal("No entries should be present on the index but found %+v", rowID)
 	})
 }
@@ -174,7 +174,7 @@ func assertIndexCanInsertAndFind(t *testing.T, index core.Uint32Index, key int, 
 func assertIndexItemsAreSame(t *testing.T, index core.Uint32Index, rowIDs []core.RowID) {
 	i := 0
 	funcCalled := false
-	index.All(func(rowID core.RowID) {
+	index.All(func(_ uint32, rowID core.RowID) {
 		funcCalled = true
 		if rowID != rowIDs[i] {
 			t.Errorf("Invalid value returned from the index at %d: %+v (expected %+v)", i, rowID, rowIDs[i])

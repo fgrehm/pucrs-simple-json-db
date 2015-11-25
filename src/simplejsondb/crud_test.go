@@ -120,3 +120,43 @@ func TestCreateAndUpdateRecords(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchByTag(t *testing.T) {
+	fakeDataFile := utils.NewFakeDataFile(20)
+	db, err := jsondb.NewWithDataFile(fakeDataFile)
+	if err != nil {
+		t.Fatalf("Unexpected error returned '%s'", err)
+	}
+
+	// Insert some data
+	states := []string{"RS", "BA", "SC"}
+	for i := 0; i < 10; i++ {
+		id := uint32(i + 1)
+		data := fmt.Sprintf(`{"id":%d,"state":"%s"}`, id, states[i % len(states)])
+		err := db.InsertRecord(id, data)
+		if err != nil {
+			t.Fatalf("Unexpected error returned when inserting '%s'", err)
+		}
+	}
+
+	// Search by state
+	result, err := db.SearchRecords("state", "RS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 4 {
+		t.Errorf("Unexpected results found, expected 4 items, got %d", len(result))
+	}
+	for i, record := range result {
+		document, err := record.ParseJSON()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if document["state"].(string) != "RS" {
+			t.Errorf("Invalid document returned with state != `RS`: %v", document)
+		} else if document["id"].(float64) != float64(i*3)+1 {
+			t.Errorf("Invalid document returned: %v", document)
+		}
+	}
+}
