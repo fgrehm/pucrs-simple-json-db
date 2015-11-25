@@ -23,6 +23,7 @@ Available commands:
 	bulk-insert <first-id> <last-id> <json-string-template>
 	update <id> <new-json-string-template>
 	find <id>
+	bulk-delete <first-id> <last-id>
 	delete <id>
 	search <attribute> <value>
 	set-log-level <log-level>
@@ -93,6 +94,8 @@ func main() {
 			update(db, l, line[7:])
 		case strings.HasPrefix(line, "delete "):
 			deleteRecord(db, line[7:])
+		case strings.HasPrefix(line, "bulk-delete "):
+			bulkDelete(db, l, line[12:])
 		case strings.HasPrefix(strings.Trim(line, " "), "show-tree"):
 			showTree(db)
 		case line == "exit":
@@ -180,6 +183,36 @@ func bulkInsert(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
 		}
 	}
 	log.Warnf("%d records inserted", lastID-initialID+1)
+}
+
+func bulkDelete(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+	argsArr := strings.SplitN(args, " ", 2)
+	if len(argsArr) != 2 {
+		usage(l.Stderr())
+		return
+	}
+	initialID, err := strconv.ParseUint(strings.Trim(argsArr[0], " "), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	lastID, err := strconv.ParseUint(strings.Trim(argsArr[1], " "), 10, 32)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	if initialID > lastID {
+		log.Error("Invalid ID range provided")
+		return
+	}
+	for id := initialID; id <= lastID; id++ {
+		log.Warnf("Deleting %v", id)
+		if err = db.DeleteRecord(uint32(id)); err != nil {
+			log.Error(err)
+			return
+		}
+	}
+	log.Warnf("%d records removed", lastID-initialID+1)
 }
 
 func find(db sjdb.SimpleJSONDB, args string) {
