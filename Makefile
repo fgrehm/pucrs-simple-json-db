@@ -7,7 +7,7 @@ all: build test
 build: bin/sjdb
 
 bin/sjdb: $(shell find -L src -type f -name '*.go')
-	gb build cmd/sjdb
+	gb build cmd/sjdb-cli
 
 .PHONY: test
 test:
