@@ -40,6 +40,7 @@ var completer = readline.NewPrefixCompleter(
 	readline.PcItem("find"),
 	readline.PcItem("help"),
 	readline.PcItem("delete"),
+	readline.PcItem("bulk-delete"),
 	readline.PcItem("search"),
 	readline.PcItem("set-log-level",
 		readline.PcItem("debug"),
