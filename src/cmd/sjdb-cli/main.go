@@ -24,7 +24,7 @@ Available commands:
 	update <id> <new-json-string-template>
 	find <id>
 	delete <id>
-	[TODO] search <attribute> <value>
+	search <attribute> <value>
 	set-log-level <log-level>
 	[TODO] inspect-block <data-block-id>
 	show-tree
@@ -87,6 +87,8 @@ func main() {
 			bulkInsert(db, l, line[12:])
 		case strings.HasPrefix(line, "find "):
 			find(db, line[5:])
+		case strings.HasPrefix(line, "search "):
+			search(db, l, line[7:])
 		case strings.HasPrefix(line, "update "):
 			update(db, l, line[7:])
 		case strings.HasPrefix(line, "delete "):
@@ -195,6 +197,28 @@ func find(db sjdb.SimpleJSONDB, args string) {
 	json.Indent(&out, record.Data, "", "  ")
 	out.WriteString("\n")
 	out.WriteTo(os.Stdout)
+}
+
+func search(db sjdb.SimpleJSONDB, l *readline.Instance, args string) {
+	argsArr := strings.SplitN(args, " ", 3)
+	if len(argsArr) != 2 {
+		usage(l.Stderr())
+		return
+	}
+	records, err := db.SearchRecords(argsArr[0], argsArr[1])
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if len(records) == 0 {
+		fmt.Println("No records found")
+		return
+	}
+
+	for _, record := range records {
+		fmt.Printf("\tID: %04d | DATA: `%s`\n", record.ID, record.Data)
+	}
 }
 
 func deleteRecord(db sjdb.SimpleJSONDB, args string) {
