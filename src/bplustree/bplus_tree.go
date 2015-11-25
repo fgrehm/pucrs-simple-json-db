@@ -471,11 +471,11 @@ func (t *bPlusTree) branchSplit(branch BranchNode, position int, key Key, greate
 		right.InsertAt(position-t.halfBranchCapacity-1, key, greaterThanOrEqToKeyNode.ID())
 	}
 
+	t.setSiblings(branch, right)
 	t.updateParentID(right.EntryAt(0).LowerThanKeyNodeID, right.ID())
 	right.All(func(entry BranchEntry) {
 		t.updateParentID(entry.GreaterThanOrEqualToKeyNodeID, right.ID())
 	})
-	t.setSiblings(branch, right)
 
 	parentKey := t.findMinimum(right)
 	return right, parentKey
