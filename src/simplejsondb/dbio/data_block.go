@@ -45,6 +45,7 @@ func (db *DataBlock) Write(position int, v interface{}) {
 	}
 }
 
+// TODO: Use `copy` and replace `copy` occurences from the rest of the code
 func (db *DataBlock) Unshift(position, count int) {
 	endOfShift := len(db.Data) - 1 - count
 	for i := endOfShift; i >= position; i-- {

@@ -29,7 +29,6 @@ Alternatively, if you have [Docker](https://www.docker.com/) installed, just
     finding data based on search keys, etc... Users of this package are expected
     to defined and implement the logic for persisting Nodes into the filesystem.
   - `cmd/sjdb-cli`: Console app that connectes to the DB for executing arbitrary commands.
-  - `cmd/sjdb-daemon`: Web server that exposes the DB operations over a JSON API.
   - `simplejsondb/actions`: High level actions that can be performed against the DB.
   - `simplejsondb/core`: High level abstractings for dealing with reading and writing
     data to / from the filesystem.

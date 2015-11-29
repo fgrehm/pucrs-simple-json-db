@@ -19,6 +19,7 @@ type SimpleJSONDB interface {
 	InsertRecord(id uint32, data string) error
 	DeleteRecord(id uint32) error
 	FindRecord(id uint32) (*core.Record, error)
+	// SHOULD USE AN ITERATOR HERE
 	SearchRecords(key, value string) ([]*core.Record, error)
 	UpdateRecord(id uint32, data string) error
 	DumpIndex() string

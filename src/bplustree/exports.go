@@ -25,6 +25,7 @@ type Node interface {
 	TotalKeys() int
 }
 type NodeID interface {
+	// TODO: Nil() bool
 	Equals(other NodeID) bool
 }
 
